@@ -1,0 +1,829 @@
+openapi: 3.0.3
+info:
+  title: Log Server API
+  description: |
+    A lightweight HTTP-based schema-driven log sink service that allows users to define custom 
+    log schemas and then receive JSON log entries validated against those schemas. This service 
+    is designed for centralized logging in development environments and microservice architectures.
+    
+    ## Features
+    - User-defined JSON schemas for log validation
+    - Schema-validated log entry storage
+    - PostgreSQL persistent storage with JSONB support
+    - Filtering and pagination support
+    - Health monitoring endpoint
+    - Docker Compose deployment ready
+    
+    ## Workflow
+    1. Register a JSON schema using POST /schemas
+    2. Send log entries to POST /logs/{schema_id}
+    3. All logs are validated against their schema before storage
+    
+  version: 1.0.0
+  contact:
+    name: Log Server Support
+    url: https://github.com/your-org/log-server
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://api.example.com
+    description: Production server
+
+paths:
+  /schemas:
+    post:
+      summary: Create a new log schema
+      description: |
+        Registers a new JSON schema that will be used to validate log entries.
+        The schema must be a valid JSON Schema Draft 7 specification.
+      operationId: createSchema
+      tags:
+        - Schemas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchemaRequest'
+            examples:
+              web_server_schema:
+                summary: Web server log schema
+                value:
+                  name: "web-server-logs"
+                  version: "1.0.0"
+                  description: "Schema for web server access logs"
+                  schema:
+                    type: "object"
+                    required: ["timestamp", "level", "message", "request_id"]
+                    properties:
+                      timestamp:
+                        type: "string"
+                        format: "date-time"
+                      level:
+                        type: "string"
+                        enum: ["DEBUG", "INFO", "WARN", "ERROR"]
+                      message:
+                        type: "string"
+                        minLength: 1
+                      request_id:
+                        type: "string"
+                        pattern: "^[a-zA-Z0-9-]+$"
+                      user_id:
+                        type: "string"
+                      response_time_ms:
+                        type: "number"
+                        minimum: 0
+              error_tracking_schema:
+                summary: Error tracking schema
+                value:
+                  name: "error-tracking"
+                  version: "2.1.0"
+                  description: "Schema for application error tracking"
+                  schema:
+                    type: "object"
+                    required: ["timestamp", "error_type", "message", "stack_trace"]
+                    properties:
+                      timestamp:
+                        type: "string"
+                        format: "date-time"
+                      error_type:
+                        type: "string"
+                        enum: ["TypeError", "ReferenceError", "SyntaxError", "CustomError"]
+                      message:
+                        type: "string"
+                      stack_trace:
+                        type: "string"
+                      user_context:
+                        type: "object"
+                        properties:
+                          user_id:
+                            type: "string"
+                          session_id:
+                            type: "string"
+      responses:
+        '201':
+          description: Schema created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchemaResponse'
+              example:
+                id: "web-server-logs"
+                name: "web-server-logs"
+                version: "1.0.0"
+                description: "Schema for web server access logs"
+                schema:
+                  type: "object"
+                  required: ["timestamp", "level", "message", "request_id"]
+                  properties:
+                    timestamp:
+                      type: "string"
+                      format: "date-time"
+                    level:
+                      type: "string"
+                      enum: ["DEBUG", "INFO", "WARN", "ERROR"]
+                created_at: "2025-10-23T09:00:00Z"
+                updated_at: "2025-10-23T09:00:00Z"
+        '400':
+          description: Invalid JSON or missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid JSON"
+                details: "Unexpected token at position 15"
+        '422':
+          description: Invalid JSON Schema specification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid JSON Schema"
+                details: "Schema must be a valid JSON Schema Draft 7 specification"
+        '409':
+          description: Schema with the same name and version already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Schema already exists"
+                details: "A schema with name 'web-server-logs' and version '1.0.0' already exists"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Retrieve schemas
+      description: |
+        Retrieves all registered schemas or filters by specific criteria.
+        Results are returned with the most recently created schemas first.
+      operationId: getSchemas
+      tags:
+        - Schemas
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of schemas to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          description: Number of schemas to skip (for pagination)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: name
+          in: query
+          description: Filter schemas by name
+          required: false
+          schema:
+            type: string
+        - name: version
+          in: query
+          description: Filter schemas by version
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved schemas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schemas:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchemaResponse'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+              example:
+                schemas:
+                  - id: "web-server-logs"
+                    name: "web-server-logs"
+                    version: "1.0.0"
+                    description: "Schema for web server access logs"
+                    created_at: "2025-10-23T09:00:00Z"
+                    updated_at: "2025-10-23T09:00:00Z"
+                  - id: "error-tracking"
+                    name: "error-tracking"
+                    version: "2.1.0"
+                    description: "Schema for application error tracking"
+                    created_at: "2025-10-22T14:30:00Z"
+                    updated_at: "2025-10-22T14:30:00Z"
+                pagination:
+                  limit: 50
+                  offset: 0
+                  total: 2
+                  has_more: false
+
+  /schemas/{schema_id}:
+    get:
+      summary: Retrieve a specific schema
+      description: Retrieves a single schema by its unique ID, including the full schema definition.
+      operationId: getSchemaById
+      tags:
+        - Schemas
+      parameters:
+        - name: schema_id
+          in: path
+          required: true
+          description: The unique string identifier of the schema
+          schema:
+            type: string
+          example: "web-server-logs"
+      responses:
+        '200':
+          description: Successfully retrieved schema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchemaResponse'
+        '404':
+          description: Schema not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Schema not found"
+                details: "No schema found with ID: invalid-schema-name"
+
+  /logs/{schema_id}:
+    post:
+      summary: Create a new log entry
+      description: |
+        Accepts a JSON object representing a single log entry and validates it against 
+        the specified schema before storing it in the database.
+      operationId: createLogEntry
+      tags:
+        - Logs
+      parameters:
+        - name: schema_id
+          in: path
+          required: true
+          description: The ID of the schema to validate the log entry against
+          schema:
+            type: string
+          example: "web-server-logs"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Log entry data that must conform to the specified schema
+            examples:
+              web_server_log:
+                summary: Web server access log
+                value:
+                  timestamp: "2025-10-23T10:00:00Z"
+                  level: "INFO"
+                  message: "User login successful"
+                  request_id: "req-12345"
+                  user_id: "user-67890"
+                  response_time_ms: 150
+              error_log:
+                summary: Application error log
+                value:
+                  timestamp: "2025-10-23T10:15:30Z"
+                  error_type: "TypeError"
+                  message: "Cannot read property 'id' of undefined"
+                  stack_trace: "TypeError: Cannot read property 'id' of undefined\n    at handleUser (/app/handlers.js:42:18)"
+                  user_context:
+                    user_id: "user-12345"
+                    session_id: "sess-abcdef"
+      responses:
+        '201':
+          description: Log entry created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogEntryResponse'
+              example:
+                id: 123
+                schema_id: "web-server-logs"
+                schema_name: "web-server-logs"
+                schema_version: "1.0.0"
+                log_data:
+                  timestamp: "2025-10-23T10:00:00Z"
+                  level: "INFO"
+                  message: "User login successful"
+                  request_id: "req-12345"
+                  user_id: "user-67890"
+                  response_time_ms: 150
+                created_at: "2025-10-23T10:00:01Z"
+        '400':
+          description: Invalid JSON or schema_id not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_json:
+                  summary: Invalid JSON
+                  value:
+                    error: "Invalid JSON"
+                    details: "Unexpected token at position 15"
+                schema_not_found:
+                  summary: Schema not found
+                  value:
+                    error: "Schema not found"
+                    details: "No schema found with ID: invalid-schema-name"
+        '422':
+          description: Log entry fails schema validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchemaValidationErrorResponse'
+              example:
+                error: "Schema validation failed"
+                details: "Log entry does not conform to schema"
+                schema_id: "web-server-logs"
+                violations:
+                  - field: "request_id"
+                    message: "Field is required but missing"
+                  - field: "response_time_ms"
+                    message: "Value must be a non-negative number"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /logs:
+    get:
+      summary: Retrieve log entries
+      description: |
+        Retrieves stored log entries with optional filtering and pagination.
+        Results are returned in reverse chronological order (newest first).
+      operationId: getLogEntries
+      tags:
+        - Logs
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of entries to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          example: 50
+        - name: offset
+          in: query
+          description: Number of entries to skip (for pagination)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          example: 0
+        - name: schema_id
+          in: query
+          description: Filter by schema ID
+          required: false
+          schema:
+            type: string
+          example: "web-server-logs"
+        - name: from
+          in: query
+          description: Start timestamp (ISO 8601 format)
+          required: false
+          schema:
+            type: string
+            format: date-time
+          example: "2025-10-23T00:00:00Z"
+        - name: to
+          in: query
+          description: End timestamp (ISO 8601 format)
+          required: false
+          schema:
+            type: string
+            format: date-time
+          example: "2025-10-23T23:59:59Z"
+      responses:
+        '200':
+          description: Successfully retrieved log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LogEntryResponse'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+              example:
+                logs:
+                  - id: 124
+                    schema_id: "web-server-logs"
+                    schema_name: "web-server-logs"
+                    schema_version: "1.0.0"
+                    log_data:
+                      timestamp: "2025-10-23T10:15:30Z"
+                      level: "ERROR"
+                      message: "Authentication failed"
+                      request_id: "req-67890"
+                      response_time_ms: 25
+                    created_at: "2025-10-23T10:15:31Z"
+                  - id: 123
+                    schema_id: "web-server-logs"
+                    schema_name: "web-server-logs"
+                    schema_version: "1.0.0"
+                    log_data:
+                      timestamp: "2025-10-23T10:00:00Z"
+                      level: "INFO"
+                      message: "User login successful"
+                      request_id: "req-12345"
+                      user_id: "user-67890"
+                      response_time_ms: 150
+                    created_at: "2025-10-23T10:00:01Z"
+                pagination:
+                  limit: 100
+                  offset: 0
+                  total: 2
+                  has_more: false
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid parameter"
+                details: "Invalid timestamp format for 'from' parameter"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      summary: Health check endpoint
+      description: |
+        Returns the health status of the service and its dependencies.
+        Used by monitoring systems and load balancers.
+      operationId: getHealthStatus
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                timestamp: "2025-10-23T10:30:00Z"
+                version: "1.0.0"
+                uptime_seconds: 3600
+                dependencies:
+                  database:
+                    status: "healthy"
+                    response_time_ms: 12
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "unhealthy"
+                timestamp: "2025-10-23T10:30:00Z"
+                version: "1.0.0"
+                uptime_seconds: 3600
+                dependencies:
+                  database:
+                    status: "unhealthy"
+                    error: "Connection timeout"
+
+components:
+  schemas:
+    SchemaRequest:
+      type: object
+      required:
+        - name
+        - version
+        - schema
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Human-readable name for the schema
+          example: "web-server-logs"
+        version:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9-]+)?$'
+          description: Semantic version of the schema (e.g., 1.0.0, 2.1.0-beta)
+          example: "1.0.0"
+        description:
+          type: string
+          maxLength: 1000
+          description: Optional description of what this schema is used for
+          example: "Schema for web server access logs"
+        schema:
+          type: object
+          description: Valid JSON Schema Draft 7 specification
+          example:
+            type: "object"
+            required: ["timestamp", "level", "message"]
+            properties:
+              timestamp:
+                type: "string"
+                format: "date-time"
+              level:
+                type: "string"
+                enum: ["DEBUG", "INFO", "WARN", "ERROR"]
+              message:
+                type: "string"
+                minLength: 1
+
+    SchemaResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique string identifier for the schema (same as name)
+          example: "web-server-logs"
+        name:
+          type: string
+          description: Human-readable name for the schema
+          example: "web-server-logs"
+        version:
+          type: string
+          description: Semantic version of the schema
+          example: "1.0.0"
+        description:
+          type: string
+          nullable: true
+          description: Optional description of the schema
+          example: "Schema for web server access logs"
+        schema:
+          type: object
+          description: The JSON Schema definition
+          example:
+            type: "object"
+            required: ["timestamp", "level", "message"]
+            properties:
+              timestamp:
+                type: "string"
+                format: "date-time"
+              level:
+                type: "string"
+                enum: ["DEBUG", "INFO", "WARN", "ERROR"]
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the schema was created
+          example: "2025-10-23T09:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the schema was last updated
+          example: "2025-10-23T09:00:00Z"
+
+    LogEntryResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier for the log entry
+          example: 123
+        schema_id:
+          type: string
+          description: ID of the schema this log entry was validated against
+          example: "web-server-logs"
+        schema_name:
+          type: string
+          description: Name of the schema used for validation
+          example: "web-server-logs"
+        schema_version:
+          type: string
+          description: Version of the schema used for validation
+          example: "1.0.0"
+        log_data:
+          type: object
+          description: The actual log data that was validated against the schema
+          additionalProperties: true
+          example:
+            timestamp: "2025-10-23T10:00:00Z"
+            level: "INFO"
+            message: "User login successful"
+            request_id: "req-12345"
+            user_id: "user-67890"
+            response_time_ms: 150
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the log entry was stored
+          example: "2025-10-23T10:00:01Z"
+
+    PaginationInfo:
+      type: object
+      properties:
+        limit:
+          type: integer
+          description: Maximum number of entries requested
+          example: 100
+        offset:
+          type: integer
+          description: Number of entries skipped
+          example: 0
+        total:
+          type: integer
+          description: Total number of entries available
+          example: 2
+        has_more:
+          type: boolean
+          description: Whether there are more entries available
+          example: false
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          description: Overall health status of the service
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the health check was performed
+          example: "2025-10-23T10:30:00Z"
+        version:
+          type: string
+          description: Current version of the service
+          example: "1.0.0"
+        uptime_seconds:
+          type: integer
+          description: Number of seconds the service has been running
+          example: 3600
+        dependencies:
+          type: object
+          description: Health status of service dependencies
+          properties:
+            database:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [healthy, unhealthy]
+                  example: "healthy"
+                response_time_ms:
+                  type: integer
+                  description: Database response time in milliseconds
+                  example: 12
+                error:
+                  type: string
+                  description: Error message if dependency is unhealthy
+                  example: "Connection timeout"
+
+    SchemaValidationErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: High-level error category
+          example: "Schema validation failed"
+        details:
+          type: string
+          description: Detailed error message
+          example: "Log entry does not conform to schema"
+        schema_id:
+          type: string
+          description: The ID of the schema that was used for validation
+          example: "web-server-logs"
+        violations:
+          type: array
+          description: List of specific validation violations
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                description: The field that failed validation
+                example: "request_id"
+              message:
+                type: string
+                description: Description of the validation failure
+                example: "Field is required but missing"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: High-level error category
+          example: "Schema not found"
+        details:
+          type: string
+          description: Detailed error message
+          example: "No schema found with ID: invalid-schema-name"
+
+  examples:
+    WebServerSchema:
+      summary: Web server log schema
+      value:
+        name: "web-server-logs"
+        version: "1.0.0"
+        description: "Schema for web server access logs"
+        schema:
+          type: "object"
+          required: ["timestamp", "level", "message", "request_id"]
+          properties:
+            timestamp:
+              type: "string"
+              format: "date-time"
+            level:
+              type: "string"
+              enum: ["DEBUG", "INFO", "WARN", "ERROR"]
+            message:
+              type: "string"
+              minLength: 1
+            request_id:
+              type: "string"
+              pattern: "^[a-zA-Z0-9-]+$"
+
+    ErrorTrackingSchema:
+      summary: Error tracking schema
+      value:
+        name: "error-tracking"
+        version: "2.1.0"
+        description: "Schema for application error tracking"
+        schema:
+          type: "object"
+          required: ["timestamp", "error_type", "message", "stack_trace"]
+          properties:
+            timestamp:
+              type: "string"
+              format: "date-time"
+            error_type:
+              type: "string"
+              enum: ["TypeError", "ReferenceError", "SyntaxError", "CustomError"]
+            message:
+              type: "string"
+            stack_trace:
+              type: "string"
+
+    WebServerLogEntry:
+      summary: Web server log entry
+      value:
+        timestamp: "2025-10-23T10:00:00Z"
+        level: "INFO"
+        message: "User login successful"
+        request_id: "req-12345"
+        user_id: "user-67890"
+        response_time_ms: 150
+
+    ErrorLogEntry:
+      summary: Error tracking log entry
+      value:
+        timestamp: "2025-10-23T10:15:30Z"
+        error_type: "TypeError"
+        message: "Cannot read property 'id' of undefined"
+        stack_trace: "TypeError: Cannot read property 'id' of undefined\n    at handleUser (/app/handlers.js:42:18)"
+        user_context:
+          user_id: "user-12345"
+          session_id: "sess-abcdef"
+
+tags:
+  - name: Schemas
+    description: Operations for managing log schemas
+  - name: Logs
+    description: Operations for managing log entries
+  - name: Health
+    description: Health monitoring endpoints
+
+externalDocs:
+  description: Find more info in the Software Requirements Document
+  url: ./SRD.md
