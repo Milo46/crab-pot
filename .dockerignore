@@ -1,0 +1,66 @@
+# Docker ignore file to reduce build context size
+
+# Target directory (Rust build artifacts)
+target/
+**target/
+
+# Cargo lock file (let Docker generate its own)
+# Cargo.lock
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Development files
+docker-compose.dev.yml
+docker-compose.prod.yml
+Dockerfile.dev
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Cache directories
+node_modules/
+npm-debug.log*
+
+# Test files
+tests/
+**/*.test.rs
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Backup files
+*.bak
+*.tmp
+*.temp
+
+# Development database
+*.db
+*.sqlite
+*.sqlite3

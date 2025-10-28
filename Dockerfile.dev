@@ -1,0 +1,30 @@
+#=========================================================================
+# DEVELOPMENT/DEBUG DOCKERFILE
+#=========================================================================
+
+FROM rust:latest
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    gdb \
+    strace \
+    valgrind \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN cargo install --locked cargo-watch cargo-edit
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+
+RUN cargo build || true
+
+COPY src ./src
+
+EXPOSE 8080
+
+ENV RUST_LOG=debug
+ENV RUST_BACKTRACE=1
+
+CMD ["cargo", "watch", "-x", "run"]
