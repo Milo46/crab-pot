@@ -8,14 +8,14 @@ use serde_json::json;
 use tokio::net::TcpListener;
 
 #[tokio::main]
-async fn main() {`
+async fn main() {
     let app = Router::new()
         .route("/", get(root_handler))
         .route("/user/{id}", get(user_handler));
     
-    println!("Axum server running at http://127.0.0.1:8080");
+    println!("Axum server running at http://0.0.0.0:8080");
 
-    let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
+    let listener = TcpListener::bind("0.0.0.0:8080").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
