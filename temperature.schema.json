@@ -1,0 +1,22 @@
+{
+    "name": "temperature-readings",
+    "version": "1.0.0",
+    "description": "Schema for temperature sensor readings",
+    "schema_definition": {
+        "type": "object",
+        "required": ["timestamp", "location", "temperature"],
+        "properties": {
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "location": {
+                "type": "string",
+                "minLength": 1
+            },
+            "temperature": {
+                "type": "number"
+            }
+        }
+    }
+}

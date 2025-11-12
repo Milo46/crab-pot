@@ -21,9 +21,15 @@ use handlers::{
     get_schemas, get_schema_by_id, create_schema, update_schema, delete_schema,
     get_logs, get_log_by_id, create_log, delete_log,
 };
-use axum::{response::Json, http::StatusCode, extract::Path};
+use axum::{response::Json, http::StatusCode};
 use serde_json::json;
 use chrono;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub schema_service: Arc<SchemaService>,
+    pub log_service: Arc<LogService>,
+}
 
 async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
     tracing::info!("Health check endpoint called");
@@ -32,12 +38,6 @@ async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
         "service": "log-server",
         "timestamp": chrono::Utc::now().to_rfc3339()
     })))
-}
-
-#[derive(Clone)]
-pub struct AppState {
-    pub schema_service: Arc<SchemaService>,
-    pub log_service: Arc<LogService>,
 }
 
 #[tokio::main]

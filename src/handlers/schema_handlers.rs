@@ -36,11 +36,7 @@ pub struct SchemaResponse {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-    pub message: String,
-}
+use super::ErrorResponse;
 
 // Handler functions - only responsible for HTTP concerns
 pub async fn get_schemas(

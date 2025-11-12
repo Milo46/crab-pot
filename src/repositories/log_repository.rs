@@ -1,12 +1,15 @@
 use async_trait::async_trait;
 use sqlx::PgPool;
+// use crate::models::log_model::Log;
+
 use crate::models::Log;
+
 use anyhow::Result;
 
 #[async_trait]
 pub trait LogRepositoryTrait {
     async fn get_by_schema_id(&self, schema_id: &str) -> Result<Vec<Log>>;
-    async fn get_by_id(&self, id: i32) -> Result<Option<Log>>;
+    async fn get_by_id(&self, id: &str) -> Result<Option<Log>>;
     async fn create(&self, log: &Log) -> Result<Log>;
     async fn delete(&self, id: i32) -> Result<bool>;
 }
@@ -34,7 +37,7 @@ impl LogRepositoryTrait for LogRepository {
         Ok(logs)
     }
 
-    async fn get_by_id(&self, id: i32) -> Result<Option<Log>> {
+    async fn get_by_id(&self, id: &str) -> Result<Option<Log>> {
         let log = sqlx::query_as::<_, Log>("SELECT * FROM logs WHERE id = $1")
             .bind(id)
             .fetch_optional(&self.pool)

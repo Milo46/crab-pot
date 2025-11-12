@@ -29,7 +29,7 @@ impl LogService {
         self.log_repository.get_by_schema_id(schema_id).await
     }
 
-    pub async fn get_log_by_id(&self, id: i32) -> Result<Option<Log>> {
+    pub async fn get_log_by_id(&self, id: &str) -> Result<Option<Log>> {
         self.log_repository.get_by_id(id).await
     }
 

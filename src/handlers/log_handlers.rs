@@ -23,11 +23,7 @@ pub struct LogResponse {
     pub created_at: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-    pub message: String,
-}
+use super::ErrorResponse;
 
 // Handler functions - only responsible for HTTP concerns
 pub async fn get_logs(
@@ -79,9 +75,9 @@ pub async fn get_logs(
 
 pub async fn get_log_by_id(
     State(state): State<AppState>,
-    Path(id): Path<i32>,
+    Path(id): Path<String>,
 ) -> Result<Json<LogResponse>, (StatusCode, Json<ErrorResponse>)> {
-    match state.log_service.get_log_by_id(id).await {
+    match state.log_service.get_log_by_id(&id).await {
         Ok(Some(log)) => Ok(Json(LogResponse {
             id: log.id,
             schema_id: log.schema_id,
