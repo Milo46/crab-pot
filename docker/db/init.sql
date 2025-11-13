@@ -1,11 +1,11 @@
 -- Initialize Log Server Database
 -- This script sets up the initial database schema
 
--- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create schemas table for storing user-defined log schemas
 CREATE TABLE IF NOT EXISTS schemas (
-    id VARCHAR(255) PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     version VARCHAR(50) NOT NULL,
     description TEXT,
