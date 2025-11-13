@@ -4,6 +4,7 @@ use axum::{
 };
 use tokio::net::TcpListener;
 use std::{env, sync::Arc};
+use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tower_http::{
     trace::TraceLayer,
@@ -57,15 +58,14 @@ async fn main() -> anyhow::Result<()> {
     let database_url = env::var("DATABASE_URL")
         .expect("DATABASE_URL environment variable is not set");
     
-    let pool = sqlx::postgres::PgPool::connect(&database_url)
-        .await
-        .expect("Failed to connect to database");
+    let pool = sqlx::postgres::PgPool::connect(&database_url).await?;
+    tracing::info!("✅ Database connected successfully!");
     
     let schema_repository = Arc::new(SchemaRepository::new(pool.clone()));
     let log_repository = Arc::new(LogRepository::new(pool.clone()));
     
     let schema_service = Arc::new(SchemaService::new(schema_repository.clone()));
-    let log_service = Arc::new(LogService::new(log_repository, schema_repository));
+    let log_service = Arc::new(LogService::new(log_repository.clone(), schema_repository));
     
     let app_state = AppState {
         schema_service,
@@ -92,8 +92,6 @@ async fn main() -> anyhow::Result<()> {
         )
         .with_state(app_state);
     
-    tracing::info!("🚀 Log Server starting up at http://0.0.0.0:8080");
-    tracing::info!("✅ Database connected successfully!");
     tracing::info!("📊 Available endpoints:");
     tracing::info!("   GET    /                     - Health check");
     tracing::info!("   GET    /health               - Health check");
@@ -107,8 +105,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("   GET    /logs/:id               - Get log by ID");
     tracing::info!("   DELETE /logs/:id               - Delete log");
 
-    let listener = TcpListener::bind("0.0.0.0:8080").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let addr: SocketAddr = "0.0.0.0:8080".parse()?;
+    tracing::info!("🚀 Log Server running at http://{}", addr);
+
+    let listener = TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
     
     Ok(())
 }
