@@ -8,7 +8,7 @@ use anyhow::Result;
 pub trait SchemaRepositoryTrait {
     async fn get_all(&self) -> Result<Vec<Schema>>;
     async fn get_by_id(&self, id: Uuid) -> Result<Option<Schema>>;
-    async fn get_by_name_and_id(&self, name: &str, version: &str) -> Result<Option<Schema>>;
+    async fn get_by_name_and_version(&self, name: &str, version: &str) -> Result<Option<Schema>>;
     async fn create(&self, schema: &Schema) -> Result<Schema>;
     async fn update(&self, id: Uuid, schema: &Schema) -> Result<Option<Schema>>;
     async fn delete(&self, id: Uuid) -> Result<bool>;
@@ -42,7 +42,7 @@ impl SchemaRepositoryTrait for SchemaRepository {
         Ok(schema)
     }
 
-    async fn get_by_name_and_id(&self, name: &str, version: &str) -> Result<Option<Schema>> {
+    async fn get_by_name_and_version(&self, name: &str, version: &str) -> Result<Option<Schema>> {
         let schema = sqlx::query_as::<_, Schema>("SELECT * FROM schemas WHERE name = $1 AND version = $2")
             .bind(name)
             .bind(version)

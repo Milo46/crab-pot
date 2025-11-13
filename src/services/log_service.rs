@@ -22,7 +22,7 @@ impl LogService {
     }
 
     pub async fn get_logs_by_schema_name_and_id(&self, name: &str, version: &str) -> Result<Vec<Log>> {
-        let schema = self.schema_repository.get_by_name_and_id(name, version).await?;
+        let schema = self.schema_repository.get_by_name_and_version(name, version).await?;
         if schema.is_none() {
             return Err(anyhow!("Schema with name:version '{}:{}' not found", name, version));
         }
