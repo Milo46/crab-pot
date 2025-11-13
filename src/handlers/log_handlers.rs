@@ -85,9 +85,9 @@ pub async fn get_logs(
 
 pub async fn get_log_by_id(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(id): Path<i32>,
 ) -> Result<Json<LogResponse>, (StatusCode, Json<ErrorResponse>)> {
-    match state.log_service.get_log_by_id(&id).await {
+    match state.log_service.get_log_by_id(id).await {
         Ok(Some(log)) => Ok(Json(LogResponse {
             id: log.id,
             schema_id: log.schema_id,

@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS schemas (
 -- Create logs table for storing log entries
 CREATE TABLE IF NOT EXISTS logs (
     id SERIAL PRIMARY KEY,
-    schema_id VARCHAR(255) NOT NULL REFERENCES schemas(id),
+    schema_id UUID NOT NULL REFERENCES schemas(id),
     log_data JSONB NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );

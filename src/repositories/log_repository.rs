@@ -10,7 +10,7 @@ use anyhow::Result;
 #[async_trait]
 pub trait LogRepositoryTrait {
     async fn get_by_schema_id(&self, schema_id: Uuid) -> Result<Vec<Log>>;
-    async fn get_by_id(&self, id: &str) -> Result<Option<Log>>;
+    async fn get_by_id(&self, id: i32) -> Result<Option<Log>>;
     async fn create(&self, log: &Log) -> Result<Log>;
     async fn delete(&self, id: i32) -> Result<bool>;
 }
@@ -38,11 +38,20 @@ impl LogRepositoryTrait for LogRepository {
         Ok(logs)
     }
 
-    async fn get_by_id(&self, id: &str) -> Result<Option<Log>> {
+    async fn get_by_id(&self, id: i32) -> Result<Option<Log>> {
         let log = sqlx::query_as::<_, Log>("SELECT * FROM logs WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+           .bind(id)
+           .fetch_optional(&self.pool)
+           .await?;
+
+        // let log = sqlx::query_as!(
+        //     Log,
+        //     "SELECT id, schema_id, log_data, created_at FROM logs WHERE id = $1",
+        //     id
+        // )
+        //     .fetch_optional(&self.pool)
+        //     .await?;
+
         Ok(log)
     }
 
