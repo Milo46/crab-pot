@@ -17,3 +17,4 @@ fi
 curl \
     --request GET \
     --location $URL \
+    --header "Content-Type: application/json"
