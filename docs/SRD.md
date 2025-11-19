@@ -1,5 +1,31 @@
 # Log Server SRD (Software Requirements Document) - v1.0.0
 
+# Table of Contents
+
+- [1. Short description](#1-short-description)
+- [2. Purpose of the project](#2-purpose-of-the-project)
+- [3. Use Case](#3-use-case)
+- [4. Functional Requirements](#4-functional-requirements)
+  - [4.1 POST /schemas](#41-post-schemas)
+  - [4.2 GET /schemas](#42-get-schemas)
+  - [4.2.1 GET /schemas/{id}](#421-get-schemasid)
+  - [4.3 POST /logs](#43-post-logs)
+  - [4.4 GET /logs](#44-get-logs)
+  - [4.4.1 GET /logs/schema/{schema_name}](#441-get-logsschemaschema_name)
+  - [4.4.2 GET /logs/schema/{schema_name}/{version}](#442-get-logsschemaschema_nameversion)
+  - [4.4.3 GET /logs/{id}](#443-get-logsid)
+  - [4.5 PUT /schemas/{id}](#45-put-schemasid)
+  - [4.6 DELETE /schemas/{id}](#46-delete-schemasid)
+  - [4.7 DELETE /logs/{id}](#47-delete-logsid)
+  - [4.8 GET /health](#48-get-health)
+  - [4.9 Error Handling](#49-error-handling)
+- [5. Non-Functional Requirements](#5-non-functional-requirements)
+- [6. System Architecture](#6-system-architecture)
+- [7. Data Models](#7-data-models)
+- [8. API Specification](#8-api-specification)
+- [9. Version Information](#9-version-information)
+- [10. Future Improvements](#10-future-improvements)
+
 ## 1. Short description
 
 A lightweight HTTP-based **schema-driven log sink** service that allows users to define custom log schemas
@@ -46,7 +72,7 @@ Benefits:
 * Validates that the provided schema is a valid JSON Schema
 * Stores the schema definition in the database with an auto-generated UUID
 * Returns HTTP 201 on successful creation with the assigned schema UUID
-* Supports JSON Schema Draft 7 specification
+* Supports **only** JSON Schema Draft 7 specification
 * Example payload:
 
     ```json
