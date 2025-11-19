@@ -43,10 +43,7 @@ pub async fn get_logs(
     if schema_name.trim().is_empty() || schema_version.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "INVALID_INPUT".to_string(),
-                message: "Schema name or version cannot be empty".to_string(),
-            }),
+            Json(ErrorResponse::new("INVALID_INPUT", "Schema name or version cannot be empty")),
         ));
     }
 
@@ -89,10 +86,7 @@ pub async fn get_logs(
 
             Err((
                 status_code,
-                Json(ErrorResponse {
-                    error: "FETCH_FAILED".to_string(),
-                    message: e.to_string(),
-                }),
+                Json(ErrorResponse::new("FETCH_FAILED", e.to_string())),
             ))
         }
     }
@@ -111,17 +105,11 @@ pub async fn get_log_by_id(
         })),
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: "NOT_FOUND".to_string(),
-                message: format!("Log with id '{}' not found", id),
-            }),
+            Json(ErrorResponse::new("NOT_FOUND", format!("Log with id '{}' not found", id))),
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "FETCH_FAILED".to_string(),
-                message: e.to_string(),
-            }),
+            Json(ErrorResponse::new("FETCH_FAILED", e.to_string())),
         )),
     }
 }
@@ -133,20 +121,14 @@ pub async fn create_log(
     if payload.schema_id.is_nil() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "INVALID_INPUT".to_string(),
-                message: "Schema ID cannot be empty".to_string(),
-            }),
+            Json(ErrorResponse::new("INVALID_INPUT", "Schema ID cannot be empty")),
         ));
     }
 
     if !payload.log_data.is_object() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "INVALID_INPUT".to_string(),
-                message: "Log data must be a JSON object".to_string(),
-            }),
+            Json(ErrorResponse::new("INVALID_INPUT", "Log data must be a JSON object")),
         ));
     }
 
@@ -174,10 +156,7 @@ pub async fn create_log(
 
             Err((
                 status_code,
-                Json(ErrorResponse {
-                    error: "CREATION_FAILED".to_string(),
-                    message: e.to_string(),
-                }),
+                Json(ErrorResponse::new("CREATION_FAILED", e.to_string())),
             ))
         }
     }
@@ -191,17 +170,11 @@ pub async fn delete_log(
         Ok(true) => Ok(StatusCode::NO_CONTENT),
         Ok(false) => Err((
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: "NOT_FOUND".to_string(),
-                message: format!("Log with id '{}' not found", id),
-            }),
+            Json(ErrorResponse::new("NOT_FOUND", format!("Log with id '{}' not found", id))),
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "DELETION_FAILED".to_string(),
-                message: e.to_string(),
-            }),
+            Json(ErrorResponse::new("DELETION_FAILED", e.to_string())),
         )),
     }
 }

@@ -1,7 +1,8 @@
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{StatusCode, HeaderMap, header},
     Json,
+    response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -77,13 +78,10 @@ pub async fn get_schemas(
         }
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "INTERNAL_ERROR".to_string(),
-                message: e.to_string(),
-            }),
+            Json(ErrorResponse::new("INTERNAL_ERROR", e.to_string())),
         )),
     }
-}
+2}
 
 pub async fn get_schema_by_id(
     State(state): State<AppState>,
@@ -92,10 +90,7 @@ pub async fn get_schema_by_id(
     if id.is_nil() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "INVALID_INPUT".to_string(),
-                message: "Schema ID cannot be empty".to_string(),
-            }),
+            Json(ErrorResponse::new("INVALID_INPUT", "Schema ID cannot be empty")),
         ));
     }
 
@@ -111,17 +106,11 @@ pub async fn get_schema_by_id(
         })),
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: "NOT_FOUND".to_string(),
-                message: format!("Schema with id '{}' not found", id),
-            }),
+            Json(ErrorResponse::new("NOT_FOUND", format!("Schema with id '{}' not found", id))),
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "INTERNAL_ERROR".to_string(),
-                message: e.to_string(),
-            }),
+            Json(ErrorResponse::new("INTERNAL_ERROR", e.to_string())),
         )),
     }
 }
@@ -129,24 +118,18 @@ pub async fn get_schema_by_id(
 pub async fn create_schema(
     State(state): State<AppState>,
     Json(payload): Json<CreateSchemaRequest>,
-) -> Result<Json<SchemaResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     if payload.name.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "INVALID_INPUT".to_string(),
-                message: "Schema name cannot be empty".to_string(),
-            }),
+            Json(ErrorResponse::new("INVALID_INPUT", "Schema name cannot be empty")),
         ));
     }
 
     if payload.version.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "INVALID_INPUT".to_string(),
-                message: "Schema version cannot be empty".to_string(),
-            }),
+            Json(ErrorResponse::new("INVALID_INPUT", "Schema version cannot be empty")),
         ));
     }
 
@@ -159,15 +142,28 @@ pub async fn create_schema(
         )
         .await
     {
-        Ok(schema) => Ok(Json(SchemaResponse {
-            id: schema.id,
-            name: schema.name,
-            version: schema.version,
-            description: schema.description,
-            schema_definition: schema.schema_definition,
-            created_at: schema.created_at.to_rfc3339(),
-            updated_at: schema.updated_at.to_rfc3339(),
-        })),
+        Ok(schema) => {
+            let schema_id = schema.id;
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                header::LOCATION,
+                format!("/schemas/{}", schema_id).parse().unwrap(),
+            );
+            
+            Ok((
+                StatusCode::CREATED,
+                headers,
+                Json(SchemaResponse {
+                    id: schema.id,
+                    name: schema.name,
+                    version: schema.version,
+                    description: schema.description,
+                    schema_definition: schema.schema_definition,
+                    created_at: schema.created_at.to_rfc3339(),
+                    updated_at: schema.updated_at.to_rfc3339(),
+                }),
+            ))
+        },
         Err(e) => {
             let status_code = if e.to_string().contains("already exists") {
                 StatusCode::CONFLICT
@@ -177,10 +173,7 @@ pub async fn create_schema(
             
             Err((
                 status_code,
-                Json(ErrorResponse {
-                    error: "CREATION_FAILED".to_string(),
-                    message: e.to_string(),
-                }),
+                Json(ErrorResponse::new("CREATION_FAILED", e.to_string())),
             ))
         }
     }
@@ -194,20 +187,14 @@ pub async fn update_schema(
     if id.is_nil() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "INVALID_INPUT".to_string(),
-                message: "Schema ID cannot be empty".to_string(),
-            }),
+            Json(ErrorResponse::new("INVALID_INPUT", "Schema ID cannot be empty")),
         ));
     }
 
     if payload.name.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "INVALID_INPUT".to_string(),
-                message: "Schema name cannot be empty".to_string(),
-            }),
+            Json(ErrorResponse::new("INVALID_INPUT", "Schema name cannot be empty")),
         ));
     }
 
@@ -232,17 +219,11 @@ pub async fn update_schema(
         })),
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: "NOT_FOUND".to_string(),
-                message: format!("Schema with id '{}' not found", id),
-            }),
+            Json(ErrorResponse::new("NOT_FOUND", format!("Schema with id '{}' not found", id))),
         )),
         Err(e) => Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "UPDATE_FAILED".to_string(),
-                message: e.to_string(),
-            }),
+            Json(ErrorResponse::new("UPDATE_FAILED", e.to_string())),
         )),
     }
 }
@@ -254,10 +235,7 @@ pub async fn delete_schema(
     if id.is_nil() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "INVALID_INPUT".to_string(),
-                message: "Schema ID cannot be empty".to_string(),
-            }),
+            Json(ErrorResponse::new("INVALID_INPUT", "Schema ID cannot be empty")),
         ));
     }
 
@@ -265,17 +243,11 @@ pub async fn delete_schema(
         Ok(true) => Ok(StatusCode::NO_CONTENT),
         Ok(false) => Err((
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                error: "NOT_FOUND".to_string(),
-                message: format!("Schema with id '{}' not found", id),
-            }),
+            Json(ErrorResponse::new("NOT_FOUND", format!("Schema with id '{}' not found", id))),
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "DELETION_FAILED".to_string(),
-                message: e.to_string(),
-            }),
+            Json(ErrorResponse::new("DELETION_FAILED", e.to_string())),
         )),
     }
 }
