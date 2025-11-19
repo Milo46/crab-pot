@@ -35,7 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_logs_data_gin ON logs USING GIN (log_data);
 -- Insert sample schema for testing
 INSERT INTO schemas (id, name, version, description, schema_definition) 
 VALUES (
-    'web-server-logs',
+    '550e8400-e29b-41d4-a716-446655440000',
     'web-server-logs',
     '1.0.0',
     'Schema for web server access logs',
@@ -73,7 +73,7 @@ VALUES (
 -- Insert sample log entry for testing
 INSERT INTO logs (schema_id, log_data)
 VALUES (
-    'web-server-logs',
+    '550e8400-e29b-41d4-a716-446655440000',
     '{
         "timestamp": "2025-10-26T10:00:00Z",
         "level": "INFO",
