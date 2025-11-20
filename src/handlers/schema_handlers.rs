@@ -28,6 +28,11 @@ pub struct UpdateSchemaRequest {
     pub schema_definition: Value,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct DeleteSchemaQuery {
+    pub force: Option<bool>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SchemaResponse {
     pub id: Uuid,
@@ -231,6 +236,7 @@ pub async fn update_schema(
 pub async fn delete_schema(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    Query(params): Query<DeleteSchemaQuery>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
     if id.is_nil() {
         return Err((
@@ -239,15 +245,27 @@ pub async fn delete_schema(
         ));
     }
 
-    match state.schema_service.delete_schema(id).await {
+    let force = params.force.unwrap_or(false);
+
+    match state.schema_service.delete_schema(id, force).await {
         Ok(true) => Ok(StatusCode::NO_CONTENT),
         Ok(false) => Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse::new("NOT_FOUND", format!("Schema with id '{}' not found", id))),
         )),
-        Err(e) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse::new("DELETION_FAILED", e.to_string())),
-        )),
+        Err(e) => {
+            let error_msg = e.to_string();
+            if error_msg.contains("Cannot delete schema") && error_msg.contains("log(s) are associated") {
+                Err((
+                    StatusCode::CONFLICT,
+                    Json(ErrorResponse::new("SCHEMA_HAS_LOGS", error_msg)),
+                ))
+            } else {
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse::new("DELETION_FAILED", error_msg)),
+                ))
+            }
+        }
     }
 }

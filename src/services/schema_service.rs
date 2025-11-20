@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use crate::models::Schema;
 use crate::repositories::schema_repository::{SchemaRepository, SchemaRepositoryTrait, SchemaQueryParams};
+use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use serde_json::Value;
@@ -9,11 +10,12 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct SchemaService {
     repository: Arc<SchemaRepository>,
+    log_repository: Arc<LogRepository>,
 }
 
 impl SchemaService {
-    pub fn new(repository: Arc<SchemaRepository>) -> Self {
-        Self { repository }
+    pub fn new(repository: Arc<SchemaRepository>, log_repository: Arc<LogRepository>) -> Self {
+        Self { repository, log_repository }
     }
 
     pub async fn get_all_schemas(&self, params: Option<SchemaQueryParams>) -> Result<Vec<Schema>> {
@@ -84,7 +86,26 @@ impl SchemaService {
         self.repository.update(id, &updated_schema).await
     }
 
-    pub async fn delete_schema(&self, id: Uuid) -> Result<bool> {
+    pub async fn delete_schema(&self, id: Uuid, force: bool) -> Result<bool> {
+        let schema = self.repository.get_by_id(id).await?;
+        if schema.is_none() {
+            return Ok(false);
+        }
+
+        let log_count = self.log_repository.count_by_schema_id(id).await?;
+        
+        if log_count > 0 && !force {
+            return Err(anyhow!(
+                "Cannot delete schema: {} log(s) are associated with this schema. Use force=true to delete schema and all associated logs.",
+                log_count
+            ));
+        }
+
+        if force && log_count > 0 {
+            let deleted_logs = self.log_repository.delete_by_schema_id(id).await?;
+            tracing::info!("Deleted {} logs for schema {}", deleted_logs, id);
+        }
+
         self.repository.delete(id).await
     }
 

@@ -26,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
     let schema_repository = Arc::new(SchemaRepository::new(pool.clone()));
     let log_repository = Arc::new(LogRepository::new(pool.clone()));
     
-    let schema_service = Arc::new(SchemaService::new(schema_repository.clone()));
+    let schema_service = Arc::new(SchemaService::new(schema_repository.clone(), log_repository.clone()));
     let log_service = Arc::new(LogService::new(log_repository.clone(), schema_repository));
     
     let app_state = AppState {

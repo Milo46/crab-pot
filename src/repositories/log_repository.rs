@@ -13,6 +13,8 @@ pub trait LogRepositoryTrait {
     async fn get_by_id(&self, id: i32) -> Result<Option<Log>>;
     async fn create(&self, log: &Log) -> Result<Log>;
     async fn delete(&self, id: i32) -> Result<bool>;
+    async fn count_by_schema_id(&self, schema_id: Uuid) -> Result<i64>;
+    async fn delete_by_schema_id(&self, schema_id: Uuid) -> Result<i64>;
 }
 
 #[derive(Clone)]
@@ -29,11 +31,8 @@ impl LogRepository {
 #[async_trait]
 impl LogRepositoryTrait for LogRepository {
     async fn get_by_schema_id(&self, schema_id: Uuid, filters: Option<Value>) -> Result<Vec<Log>> {
-        // Build dynamic query based on filters
         if let Some(filter_obj) = &filters {
             if let Some(filter_map) = filter_obj.as_object() {
-                // Build WHERE conditions for JSONB filtering
-                // PostgreSQL @> operator checks if left JSONB contains right JSONB
                 let logs = sqlx::query_as::<_, Log>(
                     "SELECT * FROM logs WHERE schema_id = $1 AND log_data @> $2 ORDER BY created_at DESC"
                 )
@@ -53,7 +52,6 @@ impl LogRepositoryTrait for LogRepository {
             }
         }
         
-        // No filters - return all logs for this schema
         let logs = sqlx::query_as::<_, Log>(
             "SELECT * FROM logs WHERE schema_id = $1 ORDER BY created_at DESC"
         )
@@ -71,14 +69,6 @@ impl LogRepositoryTrait for LogRepository {
            .bind(id)
            .fetch_optional(&self.pool)
            .await?;
-
-        // let log = sqlx::query_as!(
-        //     Log,
-        //     "SELECT id, schema_id, log_data, created_at FROM logs WHERE id = $1",
-        //     id
-        // )
-        //     .fetch_optional(&self.pool)
-        //     .await?;
 
         Ok(log)
     }
@@ -107,5 +97,23 @@ impl LogRepositoryTrait for LogRepository {
             .await?;
         
         Ok(result.rows_affected() > 0)
+    }
+
+    async fn count_by_schema_id(&self, schema_id: Uuid) -> Result<i64> {
+        let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM logs WHERE schema_id = $1")
+            .bind(schema_id)
+            .fetch_one(&self.pool)
+            .await?;
+        
+        Ok(count)
+    }
+
+    async fn delete_by_schema_id(&self, schema_id: Uuid) -> Result<i64> {
+        let result = sqlx::query("DELETE FROM logs WHERE schema_id = $1")
+            .bind(schema_id)
+            .execute(&self.pool)
+            .await?;
+        
+        Ok(result.rows_affected() as i64)
     }
 }
