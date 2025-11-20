@@ -74,9 +74,13 @@ run_tests() {
         mv .dockerignore "$dockerignore_backup"
     fi
 
-    # Build test runner using dedicated Dockerfile
+    # Build test runner using standard docker build with layer caching
     print_status "Building test container from $TEST_DOCKERFILE..."
-    docker build -f "$TEST_DOCKERFILE" -t "$TEST_IMAGE_NAME" . >/dev/null
+    
+    docker build \
+        -f "$TEST_DOCKERFILE" \
+        -t "$TEST_IMAGE_NAME" \
+        . >/dev/null
 
     # Restore .dockerignore
     if [ -n "$dockerignore_backup" ]; then
