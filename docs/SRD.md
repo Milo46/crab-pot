@@ -201,6 +201,8 @@ Benefits:
 
 * Delete a schema by UUID
 * Path parameter `id`: The UUID of the schema to delete
+* Query parameter `force`: Deletes the schema together with it's logs.
+* Returns HTTP 409 when trying to delete a schema that haslogs without the `force` parameter
 * Returns HTTP 204 (No Content) on success
 * Returns HTTP 404 if schema not found
 * Note: Consider cascade deletion or orphan log handling
