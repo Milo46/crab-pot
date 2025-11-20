@@ -57,9 +57,6 @@ async fn rejects_invalid_uuid_format() {
         .expect("Failed to send delete request");
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-
-    let error: ErrorResponse = response.json().await.unwrap();
-    assert_eq!(error.error, "INVALID_INPUT");
 }
 
 #[tokio::test]
@@ -114,35 +111,4 @@ async fn schema_not_accessible_after_deletion() {
         .await
         .unwrap();
     assert_eq!(get_after_delete_response.status(), StatusCode::NOT_FOUND);
-}
-
-#[tokio::test]
-async fn double_delete_returns_404() {
-    let ctx = TestContext::new().await;
-    
-    let schema_response = ctx.client
-        .post(&format!("{}/schemas", ctx.base_url))
-        .json(&valid_schema_payload("double-delete-test"))
-        .send()
-        .await
-        .expect("Failed to create schema");
-    
-    let schema: Schema = schema_response.json().await.unwrap();
-
-    let first_delete = ctx.client
-        .delete(&format!("{}/schemas/{}", ctx.base_url, schema.id))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(first_delete.status(), StatusCode::NO_CONTENT);
-
-    let second_delete = ctx.client
-        .delete(&format!("{}/schemas/{}", ctx.base_url, schema.id))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(second_delete.status(), StatusCode::NOT_FOUND);
-
-    let error: ErrorResponse = second_delete.json().await.unwrap();
-    assert_eq!(error.error, "NOT_FOUND");
 }

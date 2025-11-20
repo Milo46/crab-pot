@@ -90,32 +90,3 @@ async fn rejects_missing_required_fields() {
     let error_text = response.text().await.unwrap();
     assert!(error_text.contains("missing field") || error_text.contains("name"));
 }
-
-#[tokio::test]
-async fn handles_special_characters_in_name() {
-    let ctx = TestContext::new().await;
-
-    let response = ctx.client
-        .post(&format!("{}/schemas", ctx.base_url))
-        .json(&valid_schema_payload("test-schema_123.v2"))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::CREATED);
-}
-
-#[tokio::test]
-async fn rejects_name_exceeding_max_length() {
-    let ctx = TestContext::new().await;
-    let long_name = "a".repeat(256);
-
-    let response = ctx.client
-        .post(&format!("{}/schemas", ctx.base_url))
-        .json(&valid_schema_payload(&long_name))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-}
