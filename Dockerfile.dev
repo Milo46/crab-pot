@@ -16,13 +16,10 @@ RUN cargo install --locked cargo-watch cargo-edit
 
 WORKDIR /app
 
-# Copy manifests and build dependencies first
 COPY Cargo.toml ./
 
-# Copy source code
 COPY src ./src
 
-# Build dependencies in debug mode
 RUN cargo build
 
 EXPOSE 8080
