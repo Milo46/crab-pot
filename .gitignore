@@ -39,3 +39,4 @@ Thumbs.db
 *.log
 logs/
 !api/logs
+!tests/logs
