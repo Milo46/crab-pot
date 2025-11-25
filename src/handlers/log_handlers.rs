@@ -10,7 +10,6 @@ use uuid::Uuid;
 
 use crate::AppState;
 
-// Request/Response DTOs for API layer
 #[derive(Debug, Deserialize)]
 pub struct CreateLogRequest {
     pub schema_id: Uuid,
@@ -93,7 +92,7 @@ pub async fn get_logs(
 
             Err((
                 status_code,
-                Json(ErrorResponse::new("FETCH_FAILED", e.to_string())),
+                Json(ErrorResponse::new("NOT_FOUND", e.to_string())),
             ))
         }
     }
@@ -127,7 +126,7 @@ pub async fn get_log_by_id(
 pub async fn create_log(
     State(state): State<AppState>,
     Json(payload): Json<CreateLogRequest>,
-) -> Result<Json<LogResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<(StatusCode, Json<LogResponse>), (StatusCode, Json<ErrorResponse>)> {
     if payload.schema_id.is_nil() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -153,27 +152,27 @@ pub async fn create_log(
         .create_log(payload.schema_id, payload.log_data)
         .await
     {
-        Ok(log) => Ok(Json(LogResponse {
-            id: log.id,
-            schema_id: log.schema_id,
-            log_data: log.log_data,
-            created_at: log.created_at.to_rfc3339(),
-        })),
+        Ok(log) => Ok((
+            StatusCode::CREATED,
+            Json(LogResponse {
+                id: log.id,
+                schema_id: log.schema_id,
+                log_data: log.log_data,
+                created_at: log.created_at.to_rfc3339(),
+            }),
+        )),
         Err(e) => {
-            let status_code = if e.to_string().contains("not found") {
-                StatusCode::NOT_FOUND
+            let (status_code, error) = if e.to_string().contains("not found") {
+                (StatusCode::NOT_FOUND, "NOT_FOUND")
             } else if e.to_string().contains("validation")
                 || e.to_string().contains("Required field")
             {
-                StatusCode::BAD_REQUEST
+                (StatusCode::BAD_REQUEST, "VALIDATION_FAILED")
             } else {
-                StatusCode::INTERNAL_SERVER_ERROR
+                (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR")
             };
 
-            Err((
-                status_code,
-                Json(ErrorResponse::new("CREATION_FAILED", e.to_string())),
-            ))
+            Err((status_code, Json(ErrorResponse::new(error, e.to_string()))))
         }
     }
 }

@@ -269,10 +269,19 @@ pub async fn update_schema(
                 format!("Schema with id '{}' not found", id),
             )),
         )),
-        Err(e) => Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new("UPDATE_FAILED", e.to_string())),
-        )),
+        Err(e) => {
+            let error_msg = e.to_string();
+            let status_code = if error_msg.contains("already exists") {
+                StatusCode::CONFLICT
+            } else {
+                StatusCode::BAD_REQUEST
+            };
+
+            Err((
+                status_code,
+                Json(ErrorResponse::new("UPDATE_FAILED", error_msg)),
+            ))
+        }
     }
 }
 

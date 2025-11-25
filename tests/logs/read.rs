@@ -142,7 +142,7 @@ async fn gets_logs_by_schema_name_and_version() {
     let response = ctx
         .client
         .get(&format!(
-            "{}/logs/schema/{}/version/{}",
+            "{}/logs/schema/{}/{}",
             ctx.base_url, "logs-by-name-version", "1.0.0"
         ))
         .send()

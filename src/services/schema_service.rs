@@ -89,6 +89,20 @@ impl SchemaService {
             return Ok(None);
         }
 
+        let new_schema = self
+            .repository
+            .get_by_name_and_version(&name, &version)
+            .await?;
+        if let Some(existing) = new_schema {
+            if existing.id != id {
+                return Err(anyhow!(
+                    "Schema with name '{}' and version '{}' already exists with a different ID",
+                    name,
+                    version
+                ));
+            }
+        }
+
         let updated_schema = Schema {
             id,
             name,
