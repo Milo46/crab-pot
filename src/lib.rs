@@ -9,11 +9,13 @@ use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
+pub mod error;
 pub mod handlers;
 pub mod models;
 pub mod repositories;
 pub mod services;
 
+pub use error::{AppError, AppResult};
 pub use handlers::{
     create_log, create_schema, delete_log, delete_schema, get_log_by_id, get_logs,
     get_logs_default, get_schema_by_id, get_schemas, update_schema, ErrorResponse, SchemaResponse,

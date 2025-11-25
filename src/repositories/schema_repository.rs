@@ -1,5 +1,5 @@
+use crate::error::AppResult;
 use crate::models::Schema;
-use anyhow::Result;
 use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -12,12 +12,13 @@ pub struct SchemaQueryParams {
 
 #[async_trait]
 pub trait SchemaRepositoryTrait {
-    async fn get_all(&self, params: Option<SchemaQueryParams>) -> Result<Vec<Schema>>;
-    async fn get_by_id(&self, id: Uuid) -> Result<Option<Schema>>;
-    async fn get_by_name_and_version(&self, name: &str, version: &str) -> Result<Option<Schema>>;
-    async fn create(&self, schema: &Schema) -> Result<Schema>;
-    async fn update(&self, id: Uuid, schema: &Schema) -> Result<Option<Schema>>;
-    async fn delete(&self, id: Uuid) -> Result<bool>;
+    async fn get_all(&self, params: Option<SchemaQueryParams>) -> AppResult<Vec<Schema>>;
+    async fn get_by_id(&self, id: Uuid) -> AppResult<Option<Schema>>;
+    async fn get_by_name_and_version(&self, name: &str, version: &str)
+        -> AppResult<Option<Schema>>;
+    async fn create(&self, schema: &Schema) -> AppResult<Schema>;
+    async fn update(&self, id: Uuid, schema: &Schema) -> AppResult<Option<Schema>>;
+    async fn delete(&self, id: Uuid) -> AppResult<bool>;
 }
 
 #[derive(Clone)]
@@ -33,7 +34,7 @@ impl SchemaRepository {
 
 #[async_trait]
 impl SchemaRepositoryTrait for SchemaRepository {
-    async fn get_all(&self, params: Option<SchemaQueryParams>) -> Result<Vec<Schema>> {
+    async fn get_all(&self, params: Option<SchemaQueryParams>) -> AppResult<Vec<Schema>> {
         let query_params = params.unwrap_or_default();
 
         match (&query_params.name, &query_params.version) {
@@ -83,7 +84,7 @@ impl SchemaRepositoryTrait for SchemaRepository {
         }
     }
 
-    async fn get_by_id(&self, id: Uuid) -> Result<Option<Schema>> {
+    async fn get_by_id(&self, id: Uuid) -> AppResult<Option<Schema>> {
         let schema = sqlx::query_as::<_, Schema>("SELECT * FROM schemas WHERE id = $1")
             .bind(id)
             .fetch_optional(&self.pool)
@@ -91,7 +92,11 @@ impl SchemaRepositoryTrait for SchemaRepository {
         Ok(schema)
     }
 
-    async fn get_by_name_and_version(&self, name: &str, version: &str) -> Result<Option<Schema>> {
+    async fn get_by_name_and_version(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> AppResult<Option<Schema>> {
         let schema =
             sqlx::query_as::<_, Schema>("SELECT * FROM schemas WHERE name = $1 AND version = $2")
                 .bind(name)
@@ -101,7 +106,7 @@ impl SchemaRepositoryTrait for SchemaRepository {
         Ok(schema)
     }
 
-    async fn create(&self, schema: &Schema) -> Result<Schema> {
+    async fn create(&self, schema: &Schema) -> AppResult<Schema> {
         let created_schema = sqlx::query_as::<_, Schema>(
             r#"
             INSERT INTO schemas (id, name, version, description, schema_definition, created_at, updated_at)
@@ -122,7 +127,7 @@ impl SchemaRepositoryTrait for SchemaRepository {
         Ok(created_schema)
     }
 
-    async fn update(&self, id: Uuid, schema: &Schema) -> Result<Option<Schema>> {
+    async fn update(&self, id: Uuid, schema: &Schema) -> AppResult<Option<Schema>> {
         let updated_schema = sqlx::query_as::<_, Schema>(
             r#"
             UPDATE schemas 
@@ -143,7 +148,7 @@ impl SchemaRepositoryTrait for SchemaRepository {
         Ok(updated_schema)
     }
 
-    async fn delete(&self, id: Uuid) -> Result<bool> {
+    async fn delete(&self, id: Uuid) -> AppResult<bool> {
         let result = sqlx::query("DELETE FROM schemas WHERE id = $1")
             .bind(id)
             .execute(&self.pool)

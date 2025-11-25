@@ -1,9 +1,9 @@
+use crate::error::{AppError, AppResult};
 use crate::models::Schema;
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
 use crate::repositories::schema_repository::{
     SchemaQueryParams, SchemaRepository, SchemaRepositoryTrait,
 };
-use anyhow::{anyhow, Result};
 use chrono::Utc;
 use serde_json::Value;
 use std::sync::Arc;
@@ -23,11 +23,14 @@ impl SchemaService {
         }
     }
 
-    pub async fn get_all_schemas(&self, params: Option<SchemaQueryParams>) -> Result<Vec<Schema>> {
+    pub async fn get_all_schemas(
+        &self,
+        params: Option<SchemaQueryParams>,
+    ) -> AppResult<Vec<Schema>> {
         self.repository.get_all(params).await
     }
 
-    pub async fn get_schema_by_id(&self, id: Uuid) -> Result<Option<Schema>> {
+    pub async fn get_schema_by_id(&self, id: Uuid) -> AppResult<Option<Schema>> {
         self.repository.get_by_id(id).await
     }
 
@@ -35,7 +38,7 @@ impl SchemaService {
         &self,
         name: &str,
         version: &str,
-    ) -> Result<Option<Schema>> {
+    ) -> AppResult<Option<Schema>> {
         self.repository.get_by_name_and_version(name, version).await
     }
 
@@ -45,7 +48,7 @@ impl SchemaService {
         version: String,
         description: Option<String>,
         schema_definition: Value,
-    ) -> Result<Schema> {
+    ) -> AppResult<Schema> {
         self.validate_schema_definition(&schema_definition)?;
 
         let existing = self
@@ -53,11 +56,10 @@ impl SchemaService {
             .get_by_name_and_version(&name, &version)
             .await?;
         if existing.is_some() {
-            return Err(anyhow!(
+            return Err(AppError::Conflict(format!(
                 "Schema with name '{}' and version '{}' already exists",
-                name,
-                version
-            ));
+                name, version
+            )));
         }
 
         let now = Utc::now();
@@ -81,7 +83,7 @@ impl SchemaService {
         version: String,
         description: Option<String>,
         schema_definition: Value,
-    ) -> Result<Option<Schema>> {
+    ) -> AppResult<Option<Schema>> {
         self.validate_schema_definition(&schema_definition)?;
 
         let existing_schema = self.repository.get_by_id(id).await?;
@@ -95,11 +97,10 @@ impl SchemaService {
             .await?;
         if let Some(existing) = new_schema {
             if existing.id != id {
-                return Err(anyhow!(
+                return Err(AppError::Conflict(format!(
                     "Schema with name '{}' and version '{}' already exists with a different ID",
-                    name,
-                    version
-                ));
+                    name, version
+                )));
             }
         }
 
@@ -116,7 +117,7 @@ impl SchemaService {
         self.repository.update(id, &updated_schema).await
     }
 
-    pub async fn delete_schema(&self, id: Uuid, force: bool) -> Result<bool> {
+    pub async fn delete_schema(&self, id: Uuid, force: bool) -> AppResult<bool> {
         let schema = self.repository.get_by_id(id).await?;
         if schema.is_none() {
             return Ok(false);
@@ -125,10 +126,10 @@ impl SchemaService {
         let log_count = self.log_repository.count_by_schema_id(id).await?;
 
         if log_count > 0 && !force {
-            return Err(anyhow!(
+            return Err(AppError::Conflict(format!(
                 "Cannot delete schema: {} log(s) are associated with this schema. Use force=true to delete schema and all associated logs.",
                 log_count
-            ));
+            )));
         }
 
         if force && log_count > 0 {
@@ -140,13 +141,15 @@ impl SchemaService {
     }
 
     // Business logic: validate schema definition against JSON Schema meta-schema
-    fn validate_schema_definition(&self, schema_definition: &Value) -> Result<()> {
+    fn validate_schema_definition(&self, schema_definition: &Value) -> AppResult<()> {
         if !schema_definition.is_object() {
-            return Err(anyhow!("Schema definition must be a JSON object"));
+            return Err(AppError::ValidationError(
+                "Schema definition must be a JSON object".to_string(),
+            ));
         }
 
         let _compiled = jsonschema::validator_for(schema_definition)
-            .map_err(|e| anyhow!("Invalid JSON Schema: {}", e))?;
+            .map_err(|e| AppError::SchemaValidationError(format!("Invalid JSON Schema: {}", e)))?;
 
         Ok(())
 

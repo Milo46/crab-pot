@@ -1,7 +1,7 @@
+use crate::error::{AppError, AppResult};
 use crate::models::Log;
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
 use crate::repositories::schema_repository::{SchemaRepository, SchemaRepositoryTrait};
-use anyhow::{anyhow, Result};
 use chrono::Utc;
 use serde_json::Value;
 use std::sync::Arc;
@@ -29,17 +29,16 @@ impl LogService {
         name: &str,
         version: &str,
         filters: Option<Value>,
-    ) -> Result<Vec<Log>> {
+    ) -> AppResult<Vec<Log>> {
         let schema = self
             .schema_repository
             .get_by_name_and_version(name, version)
             .await?;
         if schema.is_none() {
-            return Err(anyhow!(
+            return Err(AppError::NotFound(format!(
                 "Schema with name:version '{}:{}' not found",
-                name,
-                version
-            ));
+                name, version
+            )));
         }
 
         self.log_repository
@@ -47,15 +46,20 @@ impl LogService {
             .await
     }
 
-    pub async fn get_log_by_id(&self, id: i32) -> Result<Option<Log>> {
+    pub async fn get_log_by_id(&self, id: i32) -> AppResult<Option<Log>> {
         self.log_repository.get_by_id(id).await
     }
 
-    pub async fn create_log(&self, schema_id: Uuid, log_data: Value) -> Result<Log> {
+    pub async fn create_log(&self, schema_id: Uuid, log_data: Value) -> AppResult<Log> {
         let schema = self.schema_repository.get_by_id(schema_id).await?;
         let schema = match schema {
             Some(s) => s,
-            None => return Err(anyhow!("Schema with id '{}' not found", schema_id)),
+            None => {
+                return Err(AppError::NotFound(format!(
+                    "Schema with id '{}' not found",
+                    schema_id
+                )))
+            }
         };
 
         self.validate_log_against_schema(&log_data, &schema.schema_definition)?;
@@ -70,7 +74,7 @@ impl LogService {
         self.log_repository.create(&log).await
     }
 
-    pub async fn delete_log(&self, id: i32) -> Result<bool> {
+    pub async fn delete_log(&self, id: i32) -> AppResult<bool> {
         self.log_repository.delete(id).await
     }
 
@@ -78,11 +82,11 @@ impl LogService {
         &self,
         log_data: &Value,
         schema_definition: &Value,
-    ) -> Result<()> {
+    ) -> AppResult<()> {
         let validator = jsonschema::ValidationOptions::default()
             .with_draft(jsonschema::Draft::Draft7)
             .build(schema_definition)
-            .map_err(|e| anyhow!("Invalid JSON schema: {}", e))?;
+            .map_err(|e| AppError::InternalError(format!("Invalid JSON schema: {}", e)))?;
 
         let errors: Vec<_> = validator
             .iter_errors(log_data)
@@ -92,7 +96,10 @@ impl LogService {
         if errors.is_empty() {
             Ok(())
         } else {
-            Err(anyhow!("Schema validation failed: {}", errors.join("; ")))
+            Err(AppError::SchemaValidationError(format!(
+                "Schema validation failed: {}",
+                errors.join("; ")
+            )))
         }
     }
 }

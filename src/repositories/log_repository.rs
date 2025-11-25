@@ -3,18 +3,21 @@ use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::error::AppResult;
 use crate::models::Log;
-
-use anyhow::Result;
 
 #[async_trait]
 pub trait LogRepositoryTrait {
-    async fn get_by_schema_id(&self, schema_id: Uuid, filters: Option<Value>) -> Result<Vec<Log>>;
-    async fn get_by_id(&self, id: i32) -> Result<Option<Log>>;
-    async fn create(&self, log: &Log) -> Result<Log>;
-    async fn delete(&self, id: i32) -> Result<bool>;
-    async fn count_by_schema_id(&self, schema_id: Uuid) -> Result<i64>;
-    async fn delete_by_schema_id(&self, schema_id: Uuid) -> Result<i64>;
+    async fn get_by_schema_id(
+        &self,
+        schema_id: Uuid,
+        filters: Option<Value>,
+    ) -> AppResult<Vec<Log>>;
+    async fn get_by_id(&self, id: i32) -> AppResult<Option<Log>>;
+    async fn create(&self, log: &Log) -> AppResult<Log>;
+    async fn delete(&self, id: i32) -> AppResult<bool>;
+    async fn count_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64>;
+    async fn delete_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64>;
 }
 
 #[derive(Clone)]
@@ -30,7 +33,11 @@ impl LogRepository {
 
 #[async_trait]
 impl LogRepositoryTrait for LogRepository {
-    async fn get_by_schema_id(&self, schema_id: Uuid, filters: Option<Value>) -> Result<Vec<Log>> {
+    async fn get_by_schema_id(
+        &self,
+        schema_id: Uuid,
+        filters: Option<Value>,
+    ) -> AppResult<Vec<Log>> {
         if let Some(filter_obj) = &filters {
             if let Some(filter_map) = filter_obj.as_object() {
                 let logs = sqlx::query_as::<_, Log>(
@@ -68,7 +75,7 @@ impl LogRepositoryTrait for LogRepository {
         Ok(logs)
     }
 
-    async fn get_by_id(&self, id: i32) -> Result<Option<Log>> {
+    async fn get_by_id(&self, id: i32) -> AppResult<Option<Log>> {
         let log = sqlx::query_as::<_, Log>("SELECT * FROM logs WHERE id = $1")
             .bind(id)
             .fetch_optional(&self.pool)
@@ -77,7 +84,7 @@ impl LogRepositoryTrait for LogRepository {
         Ok(log)
     }
 
-    async fn create(&self, log: &Log) -> Result<Log> {
+    async fn create(&self, log: &Log) -> AppResult<Log> {
         let created_log = sqlx::query_as::<_, Log>(
             r#"
             INSERT INTO logs (schema_id, log_data, created_at)
@@ -94,7 +101,7 @@ impl LogRepositoryTrait for LogRepository {
         Ok(created_log)
     }
 
-    async fn delete(&self, id: i32) -> Result<bool> {
+    async fn delete(&self, id: i32) -> AppResult<bool> {
         let result = sqlx::query("DELETE FROM logs WHERE id = $1")
             .bind(id)
             .execute(&self.pool)
@@ -103,7 +110,7 @@ impl LogRepositoryTrait for LogRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    async fn count_by_schema_id(&self, schema_id: Uuid) -> Result<i64> {
+    async fn count_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64> {
         let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM logs WHERE schema_id = $1")
             .bind(schema_id)
             .fetch_one(&self.pool)
@@ -112,7 +119,7 @@ impl LogRepositoryTrait for LogRepository {
         Ok(count)
     }
 
-    async fn delete_by_schema_id(&self, schema_id: Uuid) -> Result<i64> {
+    async fn delete_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64> {
         let result = sqlx::query("DELETE FROM logs WHERE schema_id = $1")
             .bind(schema_id)
             .execute(&self.pool)
