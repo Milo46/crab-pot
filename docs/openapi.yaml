@@ -16,7 +16,7 @@ info:
     
     ## Workflow
     1. Register a JSON schema using POST /schemas
-    2. Send log entries to POST /logs/{schema_id}
+    2. Send log entries to POST /logs (with schema_id in the payload)
     3. All logs are validated against their schema before storage
     
   version: 1.0.0
@@ -34,6 +34,23 @@ servers:
     description: Production server
 
 paths:
+  /:
+    get:
+      summary: Root health check endpoint
+      description: |
+        Returns the health status of the service.
+        Alternative to /health endpoint.
+      operationId: getRootStatus
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
   /schemas:
     post:
       summary: Create a new log schema
@@ -56,7 +73,7 @@ paths:
                   name: "web-server-logs"
                   version: "1.0.0"
                   description: "Schema for web server access logs"
-                  schema:
+                  schema_definition:
                     type: "object"
                     required: ["timestamp", "level", "message", "request_id"]
                     properties:
@@ -83,7 +100,7 @@ paths:
                   name: "error-tracking"
                   version: "2.1.0"
                   description: "Schema for application error tracking"
-                  schema:
+                  schema_definition:
                     type: "object"
                     required: ["timestamp", "error_type", "message", "stack_trace"]
                     properties:
@@ -112,11 +129,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/SchemaResponse'
               example:
-                id: "web-server-logs"
+                id: "550e8400-e29b-41d4-a716-446655440000"
                 name: "web-server-logs"
                 version: "1.0.0"
                 description: "Schema for web server access logs"
-                schema:
+                schema_definition:
                   type: "object"
                   required: ["timestamp", "level", "message", "request_id"]
                   properties:
@@ -135,8 +152,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                error: "Invalid JSON"
-                details: "Unexpected token at position 15"
+                error: "INVALID_SCHEMA"
+                message: "Unexpected token at position 15"
         '422':
           description: Invalid JSON Schema specification
           content:
@@ -144,8 +161,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                error: "Invalid JSON Schema"
-                details: "Schema must be a valid JSON Schema Draft 7 specification"
+                error: "INVALID_SCHEMA"
+                message: "Schema must be a valid JSON Schema Draft 7 specification"
         '409':
           description: Schema with the same name and version already exists
           content:
@@ -153,8 +170,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                error: "Schema already exists"
-                details: "A schema with name 'web-server-logs' and version '1.0.0' already exists"
+                error: "SCHEMA_CONFLICT"
+                message: "A schema with name 'web-server-logs' and version '1.0.0' already exists"
         '500':
           description: Internal server error
           content:
@@ -171,33 +188,18 @@ paths:
       tags:
         - Schemas
       parameters:
-        - name: limit
-          in: query
-          description: Maximum number of schemas to return
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
-        - name: offset
-          in: query
-          description: Number of schemas to skip (for pagination)
-          required: false
-          schema:
-            type: integer
-            minimum: 0
-            default: 0
         - name: name
           in: query
-          description: Filter schemas by name
+          description: Filter schemas by exact name match
           required: false
           schema:
             type: string
         - name: version
           in: query
-          description: Filter schemas by version
+          description: Filter schemas by exact version match
           required: false
+          schema:
+            type: string
           schema:
             type: string
       responses:
@@ -212,43 +214,61 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/SchemaResponse'
-                  pagination:
-                    $ref: '#/components/schemas/PaginationInfo'
               example:
                 schemas:
-                  - id: "web-server-logs"
+                  - id: "550e8400-e29b-41d4-a716-446655440000"
                     name: "web-server-logs"
                     version: "1.0.0"
                     description: "Schema for web server access logs"
+                    schema_definition:
+                      type: "object"
+                      required: ["timestamp", "level", "message"]
+                      properties:
+                        timestamp:
+                          type: "string"
+                          format: "date-time"
+                        level:
+                          type: "string"
+                          enum: ["DEBUG", "INFO", "WARN", "ERROR"]
                     created_at: "2025-10-23T09:00:00Z"
                     updated_at: "2025-10-23T09:00:00Z"
-                  - id: "error-tracking"
+                  - id: "660f8500-f39c-52e5-b827-557766551001"
                     name: "error-tracking"
                     version: "2.1.0"
                     description: "Schema for application error tracking"
+                    schema_definition:
+                      type: "object"
+                      required: ["error_type", "message"]
+                      properties:
+                        error_type:
+                          type: "string"
+                        message:
+                          type: "string"
                     created_at: "2025-10-22T14:30:00Z"
                     updated_at: "2025-10-22T14:30:00Z"
-                pagination:
-                  limit: 50
-                  offset: 0
-                  total: 2
-                  has_more: false
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /schemas/{schema_id}:
+  /schemas/{id}:
     get:
       summary: Retrieve a specific schema
-      description: Retrieves a single schema by its unique ID, including the full schema definition.
+      description: Retrieves a single schema by its unique UUID, including the full schema definition.
       operationId: getSchemaById
       tags:
         - Schemas
       parameters:
-        - name: schema_id
+        - name: id
           in: path
           required: true
-          description: The unique string identifier of the schema
+          description: The unique UUID identifier of the schema
           schema:
             type: string
-          example: "web-server-logs"
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
       responses:
         '200':
           description: Successfully retrieved schema
@@ -263,17 +283,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                error: "Schema not found"
-                details: "No schema found with ID: invalid-schema-name"
+                error: "NOT_FOUND"
+                message: "Schema with id '550e8400-e29b-41d4-a716-446655440000' not found"
 
     put:
       summary: Update a schema
-      description: Updates an existing schema by ID
+      description: Updates an existing schema by its UUID
       operationId: updateSchema
       tags:
         - Schemas
       parameters:
-        - name: schema_id
+        - name: id
           in: path
           required: true
           description: The unique UUID identifier of the schema
@@ -302,32 +322,50 @@ paths:
 
     delete:
       summary: Delete a schema
-      description: Deletes a schema by ID
+      description: |
+        Deletes a schema by its UUID. By default, schemas with associated logs cannot be deleted.
+        Use the 'force' query parameter to delete schemas even when logs exist.
       operationId: deleteSchema
       tags:
         - Schemas
       parameters:
-        - name: schema_id
+        - name: id
           in: path
           required: true
           description: The unique UUID identifier of the schema
           schema:
             type: string
             format: uuid
+        - name: force
+          in: query
+          required: false
+          description: Force deletion even when logs are associated with the schema
+          schema:
+            type: boolean
+            default: false
       responses:
-        '200':
+        '204':
           description: Schema deleted successfully
+        '404':
+          description: Schema not found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                example:
-                  message: "Schema deleted successfully"
-        '404':
-          description: Schema not found
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "NOT_FOUND"
+                message: "Schema with id '550e8400-e29b-41d4-a716-446655440000' not found"
+        '409':
+          description: Cannot delete schema because it has associated logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "SCHEMA_HAS_LOGS"
+                message: "Cannot delete schema: 5 log(s) are associated with this schema"
+        '500':
+          description: Internal server error
           content:
             application/json:
               schema:
@@ -444,19 +482,19 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        '204':
           description: Log entry deleted successfully
+        '404':
+          description: Log entry not found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                example:
-                  message: "Log deleted successfully"
-        '404':
-          description: Log entry not found
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "NOT_FOUND"
+                message: "Log with id '123' not found"
+        '500':
+          description: Internal server error
           content:
             application/json:
               schema:
@@ -572,7 +610,7 @@ paths:
     get:
       summary: Health check endpoint
       description: |
-        Returns the health status of the service and its dependencies.
+        Returns the health status of the service.
         Used by monitoring systems and load balancers.
       operationId: getHealthStatus
       tags:
@@ -586,28 +624,8 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
               example:
                 status: "healthy"
+                service: "log-server"
                 timestamp: "2025-10-23T10:30:00Z"
-                version: "1.0.0"
-                uptime_seconds: 3600
-                dependencies:
-                  database:
-                    status: "healthy"
-                    response_time_ms: 12
-        '503':
-          description: Service is unhealthy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HealthResponse'
-              example:
-                status: "unhealthy"
-                timestamp: "2025-10-23T10:30:00Z"
-                version: "1.0.0"
-                uptime_seconds: 3600
-                dependencies:
-                  database:
-                    status: "unhealthy"
-                    error: "Connection timeout"
 
 components:
   schemas:
@@ -715,66 +733,22 @@ components:
           description: ISO 8601 timestamp when the log entry was stored
           example: "2025-10-23T10:00:01Z"
 
-    PaginationInfo:
-      type: object
-      properties:
-        limit:
-          type: integer
-          description: Maximum number of entries requested
-          example: 100
-        offset:
-          type: integer
-          description: Number of entries skipped
-          example: 0
-        total:
-          type: integer
-          description: Total number of entries available
-          example: 2
-        has_more:
-          type: boolean
-          description: Whether there are more entries available
-          example: false
-
     HealthResponse:
       type: object
       properties:
         status:
           type: string
-          enum: [healthy, unhealthy]
-          description: Overall health status of the service
+          description: Health status of the service
           example: "healthy"
+        service:
+          type: string
+          description: Name of the service
+          example: "log-server"
         timestamp:
           type: string
           format: date-time
           description: ISO 8601 timestamp when the health check was performed
           example: "2025-10-23T10:30:00Z"
-        version:
-          type: string
-          description: Current version of the service
-          example: "1.0.0"
-        uptime_seconds:
-          type: integer
-          description: Number of seconds the service has been running
-          example: 3600
-        dependencies:
-          type: object
-          description: Health status of service dependencies
-          properties:
-            database:
-              type: object
-              properties:
-                status:
-                  type: string
-                  enum: [healthy, unhealthy]
-                  example: "healthy"
-                response_time_ms:
-                  type: integer
-                  description: Database response time in milliseconds
-                  example: 12
-                error:
-                  type: string
-                  description: Error message if dependency is unhealthy
-                  example: "Connection timeout"
 
     SchemaValidationErrorResponse:
       type: object
@@ -782,15 +756,15 @@ components:
         error:
           type: string
           description: High-level error category
-          example: "Schema validation failed"
-        details:
+          example: "VALIDATION_FAILED"
+        message:
           type: string
           description: Detailed error message
           example: "Log entry does not conform to schema"
         schema_id:
           type: string
-          description: The ID of the schema that was used for validation
-          example: "web-server-logs"
+          description: The UUID of the schema that was used for validation
+          example: "550e8400-e29b-41d4-a716-446655440000"
         violations:
           type: array
           description: List of specific validation violations
@@ -812,11 +786,21 @@ components:
         error:
           type: string
           description: High-level error category
-          example: "Schema not found"
-        details:
+          example: "INVALID_INPUT"
+        message:
           type: string
           description: Detailed error message
-          example: "No schema found with ID: invalid-schema-name"
+          example: "Schema name cannot be empty"
+        field_errors:
+          type: object
+          description: Field-specific validation errors (optional)
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            name: ["Cannot be empty"]
+            version: ["Invalid format"]
 
   examples:
     WebServerSchema:
