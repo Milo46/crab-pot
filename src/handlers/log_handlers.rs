@@ -3,28 +3,13 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use uuid::Uuid;
 
-use crate::AppState;
-
-#[derive(Debug, Deserialize)]
-pub struct CreateLogRequest {
-    pub schema_id: Uuid,
-    pub log_data: Value,
-}
-
-#[derive(Debug, Serialize)]
-pub struct LogResponse {
-    pub id: i32,
-    pub schema_id: Uuid,
-    pub log_data: Value,
-    pub created_at: String,
-}
-
-use super::ErrorResponse;
+use crate::{
+    dto::{CreateLogRequest, ErrorResponse, LogResponse},
+    AppState,
+};
 
 pub async fn get_logs_default(
     State(state): State<AppState>,
