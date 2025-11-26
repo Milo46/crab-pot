@@ -129,6 +129,15 @@ Benefits:
 * Returns HTTP 200 with schema object
 * Returns HTTP 404 if schema not found
 
+### 4.2.2 GET /schemas/{schema_name}/{schema_version}
+
+* Retrieves a specific schema by its combined and name and version
+* Path parameters:
+  * `schema_name`: The name of the schema
+  * `schema_version`: The specific version of the schema
+* Returns HTTP 200 with schema object
+* Returns HTTP 404 if schema not found
+
 ### 4.3 POST /logs
 
 * Accepts a JSON object representing a single log entry with schema reference
@@ -167,12 +176,12 @@ Benefits:
 * Query parameters: Any top-level JSONB field for exact-match filtering
 * Example: `GET /logs/schema/temperature-readings?location=desk-thermometer&temperature=22.5`
 
-#### 4.4.2 GET /logs/schema/{schema_name}/{version}
+#### 4.4.2 GET /logs/schema/{schema_name}/{schema_version}
 
 * Get all logs for a specific schema name and version
 * Path parameters:
   * `schema_name`: The name of the schema
-  * `version`: The specific version
+  * `schema_version`: The specific version
 * Query parameters: Any top-level JSONB field for exact-match filtering
 * Example: `GET /logs/schema/web-server-logs/1.0.0?level=ERROR&user_id=user-123`
 
