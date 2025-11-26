@@ -4,7 +4,7 @@ use reqwest::StatusCode;
 use crate::common::{valid_schema_payload, TestContext};
 
 #[tokio::test]
-async fn retrieves_existing_schema() {
+async fn retrieves_existing_schema_by_id() {
     let ctx = TestContext::new().await;
     let schema_response = ctx
         .client
@@ -28,6 +28,36 @@ async fn retrieves_existing_schema() {
     let retrieved: Schema = response.json().await.unwrap();
     assert_eq!(retrieved.id, schema.id);
     assert_eq!(retrieved.name, "get-test");
+}
+
+#[tokio::test]
+async fn retrieves_existing_schema_by_name_and_version() {
+    let ctx = TestContext::new().await;
+    let schema_response = ctx
+        .client
+        .post(&format!("{}/schemas", ctx.base_url))
+        .json(&valid_schema_payload("get-test-2"))
+        .send()
+        .await
+        .unwrap();
+
+    let schema: Schema = schema_response.json().await.unwrap();
+
+    let response = ctx
+        .client
+        .get(&format!(
+            "{}/schemas/{}/{}",
+            ctx.base_url, schema.name, schema.version
+        ))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let retrieved: Schema = response.json().await.unwrap();
+    assert_eq!(retrieved.id, schema.id);
+    assert_eq!(retrieved.name, "get-test-2");
 }
 
 #[tokio::test]
