@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::repositories::schema_repository::SchemaQueryParams;
 use crate::AppState;
+use crate::{repositories::schema_repository::SchemaQueryParams, Schema};
 
 #[derive(Debug, Deserialize)]
 pub struct GetSchemasQuery {
@@ -58,8 +58,23 @@ pub struct SchemaResponse {
     pub updated_at: String,
 }
 
+impl From<Schema> for SchemaResponse {
+    fn from(schema: Schema) -> Self {
+        SchemaResponse {
+            id: schema.id,
+            name: schema.name,
+            version: schema.version,
+            description: schema.description,
+            schema_definition: schema.schema_definition,
+            created_at: schema.created_at.to_rfc3339(),
+            updated_at: schema.updated_at.to_rfc3339(),
+        }
+    }
+}
+
 use super::ErrorResponse;
 
+/// ## GET /schemas
 /// Get all schemas with optional filtering by name and/or version.
 ///
 /// Query parameters:
@@ -78,7 +93,7 @@ pub async fn get_schemas(
     State(state): State<AppState>,
     Query(query): Query<GetSchemasQuery>,
 ) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
-    let repo_params = query.into();
+    let repo_params = SchemaQueryParams::from(query);
 
     match state
         .schema_service
@@ -88,15 +103,7 @@ pub async fn get_schemas(
         Ok(schemas) => {
             let schema_responses: Vec<SchemaResponse> = schemas
                 .into_iter()
-                .map(|s| SchemaResponse {
-                    id: s.id,
-                    name: s.name,
-                    version: s.version,
-                    description: s.description,
-                    schema_definition: s.schema_definition,
-                    created_at: s.created_at.to_rfc3339(),
-                    updated_at: s.updated_at.to_rfc3339(),
-                })
+                .map(|schema| SchemaResponse::from(schema))
                 .collect();
 
             Ok(Json(json!({ "schemas": schema_responses })))
@@ -108,6 +115,47 @@ pub async fn get_schemas(
     }
 }
 
+/// ## GET /schemas/{schema_name}/{schema_version}
+/// Get one schema with matching name and version.
+pub async fn get_schema_by_name_and_version(
+    State(state): State<AppState>,
+    Path((schema_name, schema_version)): Path<(String, String)>,
+) -> Result<Json<SchemaResponse>, (StatusCode, Json<ErrorResponse>)> {
+    if schema_name.trim().is_empty() || schema_version.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "INVALID_INPUT",
+                "Schema name or version cannot be empty",
+            )),
+        ));
+    }
+
+    match state
+        .schema_service
+        .get_by_name_and_version(&schema_name, &schema_version)
+        .await
+    {
+        Ok(Some(schema)) => Ok(Json(SchemaResponse::from(schema))),
+        Ok(None) => Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse::new(
+                "NOT_FOUND",
+                format!(
+                    "Schema with name '{}' and version '{}' not found",
+                    schema_name, schema_version
+                ),
+            )),
+        )),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse::new("INTERNAL_ERROR", e.to_string())),
+        )),
+    }
+}
+
+/// ## GET /schemas/{schema_id}
+/// Get one schema with matching id.
 pub async fn get_schema_by_id(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -123,15 +171,7 @@ pub async fn get_schema_by_id(
     }
 
     match state.schema_service.get_schema_by_id(id).await {
-        Ok(Some(schema)) => Ok(Json(SchemaResponse {
-            id: schema.id,
-            name: schema.name,
-            version: schema.version,
-            description: schema.description,
-            schema_definition: schema.schema_definition,
-            created_at: schema.created_at.to_rfc3339(),
-            updated_at: schema.updated_at.to_rfc3339(),
-        })),
+        Ok(Some(schema)) => Ok(Json(SchemaResponse::from(schema))),
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse::new(
@@ -146,6 +186,8 @@ pub async fn get_schema_by_id(
     }
 }
 
+/// ## POST /schemas
+/// Create a new schema.
 pub async fn create_schema(
     State(state): State<AppState>,
     Json(payload): Json<CreateSchemaRequest>,
@@ -191,15 +233,7 @@ pub async fn create_schema(
             Ok((
                 StatusCode::CREATED,
                 headers,
-                Json(SchemaResponse {
-                    id: schema.id,
-                    name: schema.name,
-                    version: schema.version,
-                    description: schema.description,
-                    schema_definition: schema.schema_definition,
-                    created_at: schema.created_at.to_rfc3339(),
-                    updated_at: schema.updated_at.to_rfc3339(),
-                }),
+                Json(SchemaResponse::from(schema)),
             ))
         }
         Err(e) => {
@@ -219,6 +253,8 @@ pub async fn create_schema(
     }
 }
 
+/// ## PUT /schemas/{schema_id}
+/// Update an existing schema.
 pub async fn update_schema(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -255,15 +291,7 @@ pub async fn update_schema(
         )
         .await
     {
-        Ok(Some(schema)) => Ok(Json(SchemaResponse {
-            id: schema.id,
-            name: schema.name,
-            version: schema.version,
-            description: schema.description,
-            schema_definition: schema.schema_definition,
-            created_at: schema.created_at.to_rfc3339(),
-            updated_at: schema.updated_at.to_rfc3339(),
-        })),
+        Ok(Some(schema)) => Ok(Json(SchemaResponse::from(schema))),
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
             Json(ErrorResponse::new(
@@ -288,6 +316,8 @@ pub async fn update_schema(
     }
 }
 
+/// ## DELETE /schema/{schema_id}
+/// Delete a schema.
 pub async fn delete_schema(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
