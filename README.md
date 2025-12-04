@@ -4,7 +4,7 @@
 covers very simple functionalities, e.g. creating schemas, log entries and then
 retrieving them back to the user. It validates the data structure and makes sure
 that data is consistent (every log has it's schema). It supports data transmission
-via HTTP and in the future via WebSocket also.
+via HTTP and data events via WebSocket also.
 
 ## Quickstart
 
@@ -22,6 +22,7 @@ via HTTP and in the future via WebSocket also.
 - ✅ Centralized — All your logs in one secure place
 - ✅ Simple HTTP API — Easy to integrate with any system
 - ✅ Data Integrity — Every log is validated against its schema
+- ✅ Live data updates - Every log write/deletion is now being pushed via WebSocket
 
 ## Prerequisites
 - Docker and Docker Compose installed
@@ -39,7 +40,9 @@ docker compose -f docker-compose.yml up -d
 
 ## Usage Examples
 
-Only available interface is via the HTTP requests, e.g. `curl`.
+There are two available interfaces:
+- pure HTTP requests for writing and reading data
+- WebSocket for getting live write updates on the data
 
 ### 1. Create your schema.
 ```bash
