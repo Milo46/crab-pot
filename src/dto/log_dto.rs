@@ -30,6 +30,39 @@ impl From<Log> for LogResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "lowercase")]
+pub enum LogAction {
+    Create { schema_id: Uuid, log_data: Value },
+    Delete { id: i32 },
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "response_type", rename_all = "lowercase")]
+pub enum LogActionResponse {
+    Success {
+        #[serde(flatten)]
+        event: LogEvent,
+    },
+    Error {
+        action: String,
+        message: String,
+    },
+}
+
+impl LogActionResponse {
+    pub fn success(event: LogEvent) -> Self {
+        LogActionResponse::Success { event }
+    }
+
+    pub fn error(action: impl Into<String>, message: impl Into<String>) -> Self {
+        LogActionResponse::Error {
+            action: action.into(),
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event_type", rename_all = "lowercase")]
 pub enum LogEvent {
     Created {
