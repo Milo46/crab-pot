@@ -29,6 +29,8 @@ impl LogService {
         name: &str,
         version: &str,
         filters: Option<Value>,
+        page: i32,
+        page_limit: i32,
     ) -> AppResult<Vec<Log>> {
         let schema = self
             .schema_repository
@@ -42,7 +44,7 @@ impl LogService {
         }
 
         self.log_repository
-            .get_by_schema_id(schema.unwrap().id, filters)
+            .get_by_schema_id(schema.unwrap().id, filters, page, page_limit)
             .await
     }
 
@@ -101,5 +103,27 @@ impl LogService {
                 errors.join("; ")
             )))
         }
+    }
+
+    pub async fn count_logs_by_schema_name_and_id(
+        &self,
+        name: &str,
+        version: &str,
+        filters: Option<Value>,
+    ) -> AppResult<i64> {
+        let schema = self
+            .schema_repository
+            .get_by_name_and_version(name, version)
+            .await?;
+        if schema.is_none() {
+            return Err(AppError::NotFound(format!(
+                "Schema with name:version '{}:{}' not found",
+                name, version
+            )));
+        }
+
+        self.log_repository
+            .count_by_schema_id_with_filters(schema.unwrap().id, filters)
+            .await
     }
 }

@@ -21,12 +21,12 @@ pub mod models;
 pub mod repositories;
 pub mod services;
 
-pub use dto::{ErrorResponse, LogEvent, SchemaResponse};
+pub use dto::{ErrorResponse, LogEvent, PaginatedLogsResponse, PaginationMetadata, SchemaResponse};
 pub use error::{AppError, AppResult};
 pub use handlers::{
     create_log, create_schema, delete_log, delete_schema, get_log_by_id, get_logs,
-    get_logs_default, get_schema_by_id, get_schema_by_name_and_version, get_schemas, update_schema,
-    ws_handler,
+    get_logs_default, get_schema_by_id, get_schema_by_name_and_version, get_schemas, query_logs,
+    update_schema, ws_handler,
 };
 pub use models::{Log, Schema};
 pub use repositories::{LogRepository, SchemaRepository};
@@ -79,6 +79,10 @@ pub fn create_app(app_state: AppState) -> Router {
         .route("/logs", post(create_log))
         .route("/logs/schema/{schema_name}", get(get_logs_default))
         .route("/logs/schema/{schema_name}/{schema_version}", get(get_logs))
+        .route(
+            "/logs/schema/{schema_name}/{schema_version}/query",
+            post(query_logs),
+        )
         .route("/logs/{id}", get(get_log_by_id))
         .route("/logs/{id}", delete(delete_log))
         .with_state(app_state)

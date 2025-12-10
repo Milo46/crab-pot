@@ -12,11 +12,18 @@ pub trait LogRepositoryTrait {
         &self,
         schema_id: Uuid,
         filters: Option<Value>,
+        page: i32,
+        page_limit: i32,
     ) -> AppResult<Vec<Log>>;
     async fn get_by_id(&self, id: i32) -> AppResult<Option<Log>>;
     async fn create(&self, log: &Log) -> AppResult<Log>;
     async fn delete(&self, id: i32) -> AppResult<bool>;
     async fn count_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64>;
+    async fn count_by_schema_id_with_filters(
+        &self,
+        schema_id: Uuid,
+        filters: Option<Value>,
+    ) -> AppResult<i64>;
     async fn delete_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64>;
 }
 
@@ -37,14 +44,25 @@ impl LogRepositoryTrait for LogRepository {
         &self,
         schema_id: Uuid,
         filters: Option<Value>,
+        page: i32,
+        page_limit: i32,
     ) -> AppResult<Vec<Log>> {
+        let offset = (page - 1) * page_limit;
         if let Some(filter_obj) = &filters {
             if let Some(filter_map) = filter_obj.as_object() {
                 let logs = sqlx::query_as::<_, Log>(
-                    "SELECT * FROM logs WHERE schema_id = $1 AND log_data @> $2 ORDER BY created_at DESC"
+                    r#"
+                    SELECT * FROM logs
+                    WHERE schema_id = $1 AND log_data @> $2
+                    ORDER BY created_at DESC
+                    LIMIT $3
+                    OFFSET $4
+                    "#,
                 )
                 .bind(schema_id)
                 .bind(filter_obj)
+                .bind(page_limit)
+                .bind(offset)
                 .fetch_all(&self.pool)
                 .await?;
 
@@ -60,9 +78,17 @@ impl LogRepositoryTrait for LogRepository {
         }
 
         let logs = sqlx::query_as::<_, Log>(
-            "SELECT * FROM logs WHERE schema_id = $1 ORDER BY created_at DESC",
+            r#"
+            SELECT * FROM logs
+            WHERE schema_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            OFFSET $3
+            "#,
         )
         .bind(schema_id)
+        .bind(page_limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
@@ -117,6 +143,28 @@ impl LogRepositoryTrait for LogRepository {
             .await?;
 
         Ok(count)
+    }
+
+    async fn count_by_schema_id_with_filters(
+        &self,
+        schema_id: Uuid,
+        filters: Option<Value>,
+    ) -> AppResult<i64> {
+        if let Some(filter_obj) = &filters {
+            if filter_obj.as_object().is_some() {
+                let count = sqlx::query_scalar::<_, i64>(
+                    "SELECT COUNT(*) FROM logs WHERE schema_id = $1 AND log_data @> $2",
+                )
+                .bind(schema_id)
+                .bind(filter_obj)
+                .fetch_one(&self.pool)
+                .await?;
+
+                return Ok(count);
+            }
+        }
+
+        self.count_by_schema_id(schema_id).await
     }
 
     async fn delete_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64> {

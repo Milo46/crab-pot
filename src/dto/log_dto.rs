@@ -11,6 +11,20 @@ pub struct CreateLogRequest {
 }
 
 #[derive(Debug, Serialize)]
+pub struct PaginationMetadata {
+    pub page: i32,
+    pub limit: i32,
+    pub total: i64,
+    pub total_pages: i32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PaginatedLogsResponse {
+    pub logs: Vec<LogResponse>,
+    pub pagination: PaginationMetadata,
+}
+
+#[derive(Debug, Serialize)]
 pub struct LogResponse {
     pub id: i32,
     pub schema_id: Uuid,
@@ -27,6 +41,22 @@ impl From<Log> for LogResponse {
             created_at: log.created_at.to_rfc3339(),
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct QueryLogsRequest {
+    #[serde(default = "default_page")]
+    pub page: i32,
+    #[serde(default = "default_limit")]
+    pub limit: i32,
+    pub filters: Option<Value>,
+}
+
+fn default_page() -> i32 {
+    1
+}
+fn default_limit() -> i32 {
+    10
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
