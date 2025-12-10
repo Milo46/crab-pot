@@ -22,4 +22,8 @@ pub use log_dto::{
     LogEvent,
     // Responses
     LogResponse,
+    PaginatedLogsResponse,
+    PaginationMetadata,
+    // Queries
+    QueryLogsRequest,
 };

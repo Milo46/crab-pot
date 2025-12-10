@@ -3,11 +3,14 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::{
-    dto::{CreateLogRequest, ErrorResponse, LogEvent, LogResponse},
+    dto::{
+        CreateLogRequest, ErrorResponse, LogEvent, LogResponse, PaginatedLogsResponse,
+        PaginationMetadata, QueryLogsRequest,
+    },
     AppState,
 };
 
@@ -15,7 +18,7 @@ pub async fn get_logs_default(
     State(state): State<AppState>,
     Path(schema_name): Path<String>,
     Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
     get_logs(
         State(state),
         Path((schema_name, "1.0.0".to_string())),
@@ -28,7 +31,7 @@ pub async fn get_logs(
     State(state): State<AppState>,
     Path((schema_name, schema_version)): Path<(String, String)>,
     Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
     if schema_name.trim().is_empty() || schema_version.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -39,26 +42,143 @@ pub async fn get_logs(
         ));
     }
 
-    let filters: Option<Value> = if params.is_empty() {
-        None
-    } else {
-        let mut filter_obj = serde_json::Map::new();
-        for (key, value) in params {
-            let json_value = serde_json::from_str::<Value>(&value).unwrap_or(Value::String(value));
-            filter_obj.insert(key, json_value);
+    fn extract_i32(params: &HashMap<String, String>, key: &str, default: i32) -> i32 {
+        params
+            .get(key)
+            .and_then(|v| v.parse::<i32>().ok())
+            .unwrap_or(default)
+    }
+
+    let page: i32 = extract_i32(&params, "page", 1);
+    let page_limit: i32 = extract_i32(&params, "limit", 10);
+
+    let filters: Option<Value> = if let Some(filters_str) = params.get("filters") {
+        match serde_json::from_str::<Value>(&filters_str) {
+            Ok(Value::Object(map)) => Some(Value::Object(map)),
+            Ok(_) => {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse::new(
+                        "INVALID_FILTERS",
+                        "Filters must be a JSON object",
+                    )),
+                ));
+            }
+            Err(_) => {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse::new(
+                        "INVALID_FILTERS",
+                        "Filters JSON is invalid",
+                    )),
+                ));
+            }
         }
-        Some(Value::Object(filter_obj))
+    } else {
+        None
     };
 
     match state
         .log_service
-        .get_logs_by_schema_name_and_id(&schema_name, &schema_version, filters)
+        .get_logs_by_schema_name_and_id(
+            &schema_name,
+            &schema_version,
+            filters.clone(),
+            page,
+            page_limit,
+        )
         .await
     {
         Ok(logs) => {
+            let total = state
+                .log_service
+                .count_logs_by_schema_name_and_id(&schema_name, &schema_version, filters)
+                .await
+                .unwrap_or(0);
+
             let log_responses: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
 
-            Ok(Json(json!({ "logs": log_responses })))
+            let total_pages = if page_limit > 0 {
+                ((total as f64) / (page_limit as f64)).ceil() as i32
+            } else {
+                0
+            };
+
+            Ok(Json(PaginatedLogsResponse {
+                logs: log_responses,
+                pagination: PaginationMetadata {
+                    page,
+                    limit: page_limit,
+                    total,
+                    total_pages,
+                },
+            }))
+        }
+        Err(e) => {
+            let status_code = if e.to_string().contains("not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+
+            Err((
+                status_code,
+                Json(ErrorResponse::new("NOT_FOUND", e.to_string())),
+            ))
+        }
+    }
+}
+
+pub async fn query_logs(
+    State(state): State<AppState>,
+    Path((schema_name, schema_version)): Path<(String, String)>,
+    Json(payload): Json<QueryLogsRequest>,
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    if schema_name.trim().is_empty() || schema_version.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "INVALID_INPUT",
+                "Schema name or version cannot be empty",
+            )),
+        ));
+    }
+
+    match state
+        .log_service
+        .get_logs_by_schema_name_and_id(
+            &schema_name,
+            &schema_version,
+            payload.filters.clone(),
+            payload.page,
+            payload.limit,
+        )
+        .await
+    {
+        Ok(logs) => {
+            let total = state
+                .log_service
+                .count_logs_by_schema_name_and_id(&schema_name, &schema_version, payload.filters)
+                .await
+                .unwrap_or(0);
+
+            let log_responses: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
+
+            let total_pages = if payload.limit > 0 {
+                ((total as f64) / (payload.limit as f64)).ceil() as i32
+            } else {
+                0
+            };
+
+            Ok(Json(PaginatedLogsResponse {
+                logs: log_responses,
+                pagination: PaginationMetadata {
+                    page: payload.page,
+                    limit: payload.limit,
+                    total,
+                    total_pages,
+                },
+            }))
         }
         Err(e) => {
             let status_code = if e.to_string().contains("not found") {
