@@ -1,19 +1,14 @@
 use axum::{
-    extract::{Path, Query, State},
-    http::{header, HeaderMap, StatusCode},
-    response::IntoResponse,
-    Json,
+    Extension, Json, extract::{Path, Query, State}, http::{HeaderMap, StatusCode, header}, response::IntoResponse
 };
 use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::{
-    dto::{
+    AppState, dto::{
         CreateSchemaRequest, DeleteSchemaQuery, ErrorResponse, GetSchemasQuery, SchemaResponse,
         UpdateSchemaRequest,
-    },
-    repositories::schema_repository::SchemaQueryParams,
-    AppState,
+    }, middleware::RequestId, repositories::schema_repository::SchemaQueryParams
 };
 
 /// ## GET /schemas
@@ -34,6 +29,7 @@ use crate::{
 pub async fn get_schemas(
     State(state): State<AppState>,
     Query(query): Query<GetSchemasQuery>,
+    Extension(request_id): Extension<RequestId>,
 ) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
     let repo_params = SchemaQueryParams::from(query);
 
@@ -52,7 +48,7 @@ pub async fn get_schemas(
         }
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse::new("INTERNAL_ERROR", e.to_string())),
+            Json(ErrorResponse::with_request_id("INTERNAL_ERROR", e.to_string(), &request_id)),
         )),
     }
 }
@@ -62,13 +58,15 @@ pub async fn get_schemas(
 pub async fn get_schema_by_name_and_version(
     State(state): State<AppState>,
     Path((schema_name, schema_version)): Path<(String, String)>,
+    Extension(request_id): Extension<RequestId>,
 ) -> Result<Json<SchemaResponse>, (StatusCode, Json<ErrorResponse>)> {
     if schema_name.trim().is_empty() || schema_version.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
+            Json(ErrorResponse::with_request_id(
                 "INVALID_INPUT",
                 "Schema name or version cannot be empty",
+                &request_id,
             )),
         ));
     }
@@ -81,17 +79,18 @@ pub async fn get_schema_by_name_and_version(
         Ok(Some(schema)) => Ok(Json(SchemaResponse::from(schema))),
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse::new(
+            Json(ErrorResponse::with_request_id(
                 "NOT_FOUND",
                 format!(
                     "Schema with name '{}' and version '{}' not found",
-                    schema_name, schema_version
+                    schema_name, schema_version,
                 ),
+                &request_id,
             )),
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse::new("INTERNAL_ERROR", e.to_string())),
+            Json(ErrorResponse::with_request_id("INTERNAL_ERROR", e.to_string(), &request_id)),
         )),
     }
 }
@@ -101,13 +100,15 @@ pub async fn get_schema_by_name_and_version(
 pub async fn get_schema_by_id(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    Extension(request_id): Extension<RequestId>,
 ) -> Result<Json<SchemaResponse>, (StatusCode, Json<ErrorResponse>)> {
     if id.is_nil() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
+            Json(ErrorResponse::with_request_id(
                 "INVALID_INPUT",
                 "Schema ID cannot be empty",
+                &request_id,
             )),
         ));
     }
@@ -116,14 +117,15 @@ pub async fn get_schema_by_id(
         Ok(Some(schema)) => Ok(Json(SchemaResponse::from(schema))),
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse::new(
+            Json(ErrorResponse::with_request_id(
                 "NOT_FOUND",
                 format!("Schema with id '{}' not found", id),
+                &request_id,
             )),
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse::new("INTERNAL_ERROR", e.to_string())),
+            Json(ErrorResponse::with_request_id("INTERNAL_ERROR", e.to_string(), &request_id)),
         )),
     }
 }
@@ -132,14 +134,16 @@ pub async fn get_schema_by_id(
 /// Create a new schema.
 pub async fn create_schema(
     State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     Json(payload): Json<CreateSchemaRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     if payload.name.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
+            Json(ErrorResponse::with_request_id(
                 "INVALID_INPUT",
                 "Schema name cannot be empty",
+                &request_id,
             )),
         ));
     }
@@ -147,9 +151,10 @@ pub async fn create_schema(
     if payload.version.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
+            Json(ErrorResponse::with_request_id(
                 "INVALID_INPUT",
                 "Schema version cannot be empty",
+                &request_id,
             )),
         ));
     }
@@ -190,7 +195,7 @@ pub async fn create_schema(
                 (StatusCode::BAD_REQUEST, "CREATION_FAILED")
             };
 
-            Err((status_code, Json(ErrorResponse::new(error_code, error_msg))))
+            Err((status_code, Json(ErrorResponse::with_request_id(error_code, error_msg, &request_id))))
         }
     }
 }
@@ -200,14 +205,16 @@ pub async fn create_schema(
 pub async fn update_schema(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    Extension(request_id): Extension<RequestId>,
     Json(payload): Json<UpdateSchemaRequest>,
 ) -> Result<Json<SchemaResponse>, (StatusCode, Json<ErrorResponse>)> {
     if id.is_nil() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
+            Json(ErrorResponse::with_request_id(
                 "INVALID_INPUT",
                 "Schema ID cannot be empty",
+                &request_id
             )),
         ));
     }
@@ -215,9 +222,10 @@ pub async fn update_schema(
     if payload.name.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
+            Json(ErrorResponse::with_request_id(
                 "INVALID_INPUT",
                 "Schema name cannot be empty",
+                &request_id,
             )),
         ));
     }
@@ -236,9 +244,10 @@ pub async fn update_schema(
         Ok(Some(schema)) => Ok(Json(SchemaResponse::from(schema))),
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse::new(
+            Json(ErrorResponse::with_request_id(
                 "NOT_FOUND",
                 format!("Schema with id '{}' not found", id),
+                &request_id,
             )),
         )),
         Err(e) => {
@@ -253,7 +262,7 @@ pub async fn update_schema(
                 (StatusCode::BAD_REQUEST, "UPDATE_FAILED")
             };
 
-            Err((status_code, Json(ErrorResponse::new(error_code, error_msg))))
+            Err((status_code, Json(ErrorResponse::with_request_id(error_code, error_msg, &request_id))))
         }
     }
 }
@@ -264,13 +273,15 @@ pub async fn delete_schema(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     Query(params): Query<DeleteSchemaQuery>,
+    Extension(request_id): Extension<RequestId>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
     if id.is_nil() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
+            Json(ErrorResponse::with_request_id(
                 "INVALID_INPUT",
                 "Schema ID cannot be empty",
+                &request_id,
             )),
         ));
     }
@@ -281,9 +292,10 @@ pub async fn delete_schema(
         Ok(true) => Ok(StatusCode::NO_CONTENT),
         Ok(false) => Err((
             StatusCode::NOT_FOUND,
-            Json(ErrorResponse::new(
+            Json(ErrorResponse::with_request_id(
                 "NOT_FOUND",
                 format!("Schema with id '{}' not found", id),
+                &request_id,
             )),
         )),
         Err(e) => {
@@ -293,12 +305,12 @@ pub async fn delete_schema(
             {
                 Err((
                     StatusCode::CONFLICT,
-                    Json(ErrorResponse::new("SCHEMA_HAS_LOGS", error_msg)),
+                    Json(ErrorResponse::with_request_id("SCHEMA_HAS_LOGS", error_msg, &request_id)),
                 ))
             } else {
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse::new("DELETION_FAILED", error_msg)),
+                    Json(ErrorResponse::with_request_id("DELETION_FAILED", error_msg, &request_id)),
                 ))
             }
         }
