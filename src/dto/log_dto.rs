@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -19,8 +20,16 @@ pub struct PaginationMetadata {
 }
 
 #[derive(Debug, Serialize)]
+pub struct TimeWindowMetadata {
+    pub date_begin: Option<DateTime<Utc>>,
+    pub date_end: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct PaginatedLogsResponse {
     pub logs: Vec<LogResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timewindow: Option<TimeWindowMetadata>,
     pub pagination: PaginationMetadata,
 }
 
@@ -49,7 +58,30 @@ pub struct QueryLogsRequest {
     pub page: i32,
     #[serde(default = "default_limit")]
     pub limit: i32,
+    pub date_begin: Option<DateTime<Utc>>,
+    pub date_end: Option<DateTime<Utc>>,
     pub filters: Option<Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct QueryParams {
+    pub page: i32,
+    pub limit: i32,
+    pub date_begin: Option<DateTime<Utc>>,
+    pub date_end: Option<DateTime<Utc>>,
+    pub filters: Option<Value>,
+}
+
+impl From<QueryLogsRequest> for QueryParams {
+    fn from(req: QueryLogsRequest) -> Self {
+        Self {
+            page: req.page,
+            limit: req.limit,
+            date_begin: req.date_begin,
+            date_end: req.date_end,
+            filters: req.filters,
+        }
+    }
 }
 
 fn default_page() -> i32 {

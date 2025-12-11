@@ -2,7 +2,8 @@ use crate::error::{AppError, AppResult};
 use crate::models::Log;
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
 use crate::repositories::schema_repository::{SchemaRepository, SchemaRepositoryTrait};
-use chrono::Utc;
+use crate::dto::log_dto::QueryParams;
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -28,9 +29,7 @@ impl LogService {
         &self,
         name: &str,
         version: &str,
-        filters: Option<Value>,
-        page: i32,
-        page_limit: i32,
+        query_params: QueryParams,
     ) -> AppResult<Vec<Log>> {
         let schema = self
             .schema_repository
@@ -44,7 +43,7 @@ impl LogService {
         }
 
         self.log_repository
-            .get_by_schema_id(schema.unwrap().id, filters, page, page_limit)
+            .get_by_schema_id(schema.unwrap().id, query_params)
             .await
     }
 
@@ -124,6 +123,35 @@ impl LogService {
 
         self.log_repository
             .count_by_schema_id_with_filters(schema.unwrap().id, filters)
+            .await
+    }
+
+    pub async fn count_logs_by_schema_name_and_id_with_dates(
+        &self,
+        name: &str,
+        version: &str,
+        filters: Option<Value>,
+        date_begin: Option<DateTime<Utc>>,
+        date_end: Option<DateTime<Utc>>,
+    ) -> AppResult<i64> {
+        let schema = self
+            .schema_repository
+            .get_by_name_and_version(name, version)
+            .await?;
+        if schema.is_none() {
+            return Err(AppError::NotFound(format!(
+                "Schema with name:version '{}:{}' not found",
+                name, version
+            )));
+        }
+
+        self.log_repository
+            .count_by_schema_id_with_filters_and_dates(
+                schema.unwrap().id,
+                filters,
+                date_begin,
+                date_end,
+            )
             .await
     }
 }

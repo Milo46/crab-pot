@@ -3,13 +3,11 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde_json::Value;
-use std::collections::HashMap;
 
 use crate::{
     dto::{
-        CreateLogRequest, ErrorResponse, LogEvent, LogResponse, PaginatedLogsResponse,
-        PaginationMetadata, QueryLogsRequest,
+        log_dto::{TimeWindowMetadata, QueryParams}, CreateLogRequest, ErrorResponse, LogEvent, LogResponse,
+        PaginatedLogsResponse, PaginationMetadata, QueryLogsRequest,
     },
     AppState,
 };
@@ -17,7 +15,7 @@ use crate::{
 pub async fn get_logs_default(
     State(state): State<AppState>,
     Path(schema_name): Path<String>,
-    Query(params): Query<HashMap<String, String>>,
+    Query(params): Query<QueryLogsRequest>,
 ) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
     get_logs(
         State(state),
@@ -30,7 +28,7 @@ pub async fn get_logs_default(
 pub async fn get_logs(
     State(state): State<AppState>,
     Path((schema_name, schema_version)): Path<(String, String)>,
-    Query(params): Query<HashMap<String, String>>,
+    Query(payload): Query<QueryLogsRequest>,
 ) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
     if schema_name.trim().is_empty() || schema_version.trim().is_empty() {
         return Err((
@@ -42,73 +40,51 @@ pub async fn get_logs(
         ));
     }
 
-    fn extract_i32(params: &HashMap<String, String>, key: &str, default: i32) -> i32 {
-        params
-            .get(key)
-            .and_then(|v| v.parse::<i32>().ok())
-            .unwrap_or(default)
-    }
-
-    let page: i32 = extract_i32(&params, "page", 1);
-    let page_limit: i32 = extract_i32(&params, "limit", 10);
-
-    let filters: Option<Value> = if let Some(filters_str) = params.get("filters") {
-        match serde_json::from_str::<Value>(&filters_str) {
-            Ok(Value::Object(map)) => Some(Value::Object(map)),
-            Ok(_) => {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse::new(
-                        "INVALID_FILTERS",
-                        "Filters must be a JSON object",
-                    )),
-                ));
-            }
-            Err(_) => {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse::new(
-                        "INVALID_FILTERS",
-                        "Filters JSON is invalid",
-                    )),
-                ));
-            }
-        }
-    } else {
-        None
-    };
+    let query_params: QueryParams = payload.into();
 
     match state
         .log_service
         .get_logs_by_schema_name_and_id(
             &schema_name,
             &schema_version,
-            filters.clone(),
-            page,
-            page_limit,
+            query_params.clone(),
         )
         .await
     {
         Ok(logs) => {
             let total = state
                 .log_service
-                .count_logs_by_schema_name_and_id(&schema_name, &schema_version, filters)
+                .count_logs_by_schema_name_and_id_with_dates(
+                    &schema_name,
+                    &schema_version,
+                    query_params.filters.clone(),
+                    query_params.date_begin,
+                    query_params.date_end,
+                )
                 .await
                 .unwrap_or(0);
 
             let log_responses: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
 
-            let total_pages = if page_limit > 0 {
-                ((total as f64) / (page_limit as f64)).ceil() as i32
+            let total_pages = if query_params.limit > 0 {
+                ((total as f64) / (query_params.limit as f64)).ceil() as i32
             } else {
                 0
             };
 
             Ok(Json(PaginatedLogsResponse {
                 logs: log_responses,
+                timewindow: if query_params.date_begin.is_some() || query_params.date_end.is_some() {
+                    Some(TimeWindowMetadata {
+                        date_begin: query_params.date_begin,
+                        date_end: query_params.date_end,
+                    })
+                } else {
+                    None
+                },
                 pagination: PaginationMetadata {
-                    page,
-                    limit: page_limit,
+                    page: query_params.page,
+                    limit: query_params.limit,
                     total,
                     total_pages,
                 },
@@ -144,37 +120,51 @@ pub async fn query_logs(
         ));
     }
 
+    let query_params: QueryParams = payload.into();
+
     match state
         .log_service
         .get_logs_by_schema_name_and_id(
             &schema_name,
             &schema_version,
-            payload.filters.clone(),
-            payload.page,
-            payload.limit,
+            query_params.clone(),
         )
         .await
     {
         Ok(logs) => {
             let total = state
                 .log_service
-                .count_logs_by_schema_name_and_id(&schema_name, &schema_version, payload.filters)
+                .count_logs_by_schema_name_and_id_with_dates(
+                    &schema_name,
+                    &schema_version,
+                    query_params.filters.clone(),
+                    query_params.date_begin,
+                    query_params.date_end,
+                )
                 .await
                 .unwrap_or(0);
 
             let log_responses: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
 
-            let total_pages = if payload.limit > 0 {
-                ((total as f64) / (payload.limit as f64)).ceil() as i32
+            let total_pages = if query_params.limit > 0 {
+                ((total as f64) / (query_params.limit as f64)).ceil() as i32
             } else {
                 0
             };
 
             Ok(Json(PaginatedLogsResponse {
                 logs: log_responses,
+                timewindow: if query_params.date_begin.is_some() || query_params.date_end.is_some() {
+                    Some(TimeWindowMetadata {
+                        date_begin: query_params.date_begin,
+                        date_end: query_params.date_end,
+                    })
+                } else {
+                    None
+                },
                 pagination: PaginationMetadata {
-                    page: payload.page,
-                    limit: payload.limit,
+                    page: query_params.page,
+                    limit: query_params.limit,
                     total,
                     total_pages,
                 },
