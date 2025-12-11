@@ -11,8 +11,8 @@ use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::AppState;
 use crate::dto::ErrorResponse;
+use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct WebSocketQuery {
@@ -42,7 +42,10 @@ pub async fn ws_handler(
                 ));
             }
             Ok(Some(_)) => {
-                tracing::debug!("WebSocket connection requested for schema_id: {}", schema_id);
+                tracing::debug!(
+                    "WebSocket connection requested for schema_id: {}",
+                    schema_id
+                );
             }
         }
     } else {
