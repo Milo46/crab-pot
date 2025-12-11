@@ -139,9 +139,67 @@ Response:
       },
       "schema_id": "891db49b-4d64-4ba0-b075-156c8c17ce1d"
     }
-  ]
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total_pages": 1,
+    "total_logs": 1
+  }
 }
 ```
+
+**Note**: All filtering is performed at the database level for optimal performance.
+You can filter logs by providing query parameters such as pagination, sorting, or custom filters
+to minimize data transfer and improve response times.
+
+### 5. Filter logs with query parameters.
+
+You can use query parameters to paginate, sort, and filter logs by date range:
+
+```bash
+# Pagination: Get page 2 with 10 logs per page
+curl --request GET \
+    --location "http://localhost:8080/logs/schema/temperature-readings/1.0.0?page=2&limit=10"
+
+# Date filtering: Get logs from a specific time range
+curl --request GET \
+    --location "http://localhost:8080/logs/schema/temperature-readings/1.0.0?date_begin=2025-11-20T00:00:00Z&date_end=2025-11-21T00:00:00Z"
+
+# Combined: Pagination + date filtering
+curl --request GET \
+    --location "http://localhost:8080/logs/schema/temperature-readings/1.0.0?page=1&limit=20&date_begin=2025-11-20T00:00:00Z&date_end=2025-11-21T00:00:00Z"
+```
+
+### 6. Query logs with custom filters using POST.
+
+For more complex queries, use the POST endpoint to filter logs by their content:
+
+```bash
+curl \
+    --request POST \
+    --location http://localhost:8080/logs/schema/temperature-readings/1.0.0/query \
+    --header "Content-Type: application/json" \
+    --data '{
+        "page": 1,
+        "limit": 10,
+        "date_begin": "2025-11-20T00:00:00Z",
+        "date_end": "2025-11-21T00:00:00Z",
+        "filters": {
+            "name": "desk",
+            "reading": 34
+        }
+    }'
+```
+
+The `filters` object allows you to search for logs where specific fields match the provided values. This example returns logs where `name` equals "desk" AND `reading` equals 34.
+
+**Available query parameters:**
+- `page` — Page number (default: 1)
+- `limit` — Logs per page (default: 50)
+- `date_begin` — Start date in ISO 8601 format
+- `date_end` — End date in ISO 8601 format
+- `filters` — Object with field-value pairs to match (POST only)
 
 ## Listening to events via WebSocket
 
