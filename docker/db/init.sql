@@ -28,6 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_logs_schema_id ON logs(schema_id);
 CREATE INDEX IF NOT EXISTS idx_logs_created_at ON logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_schemas_name ON schemas(name);
 CREATE INDEX IF NOT EXISTS idx_schemas_name_version ON schemas(name, version);
+CREATE INDEX IF NOT EXISTS idx_logs_schema_created ON logs(schema_id, created_at DESC);
 
 -- GIN index for JSON queries on log data
 CREATE INDEX IF NOT EXISTS idx_logs_data_gin ON logs USING GIN (log_data);

@@ -14,6 +14,7 @@ pub struct SchemaQueryParams {
 pub trait SchemaRepositoryTrait {
     async fn get_all(&self, params: Option<SchemaQueryParams>) -> AppResult<Vec<Schema>>;
     async fn get_by_id(&self, id: Uuid) -> AppResult<Option<Schema>>;
+    async fn get_by_name_latest(&self, name: &str) -> AppResult<Option<Schema>>;
     async fn get_by_name_and_version(&self, name: &str, version: &str)
         -> AppResult<Option<Schema>>;
     async fn create(&self, schema: &Schema) -> AppResult<Schema>;
@@ -82,6 +83,25 @@ impl SchemaRepositoryTrait for SchemaRepository {
                 Ok(schemas)
             }
         }
+    }
+
+    async fn get_by_name_latest(&self, name: &str) -> AppResult<Option<Schema>> {
+        let schema = sqlx::query_as::<_, Schema>(
+            r#"
+            SELECT *
+            FROM schemas
+            WHERE name = $1
+            ORDER BY
+                (string_to_array(version, '.'))[1]::int DESC,
+                (string_to_array(version, '.'))[2]::int DESC,
+                (string_to_array(version, '.'))[3]::int DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(name)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(schema)
     }
 
     async fn get_by_id(&self, id: Uuid) -> AppResult<Option<Schema>> {

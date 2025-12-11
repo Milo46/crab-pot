@@ -1,7 +1,9 @@
-use crate::error::{AppError, AppResult};
+use crate::dto::log_dto::{
+    LogResponse, PaginatedLogsResponse, PaginationMetadata, QueryParams, TimeWindowMetadata,
+};
+use crate::error::AppResult;
 use crate::models::Log;
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
-use crate::repositories::schema_repository::{SchemaRepository, SchemaRepositoryTrait};
 use chrono::Utc;
 use serde_json::Value;
 use std::sync::Arc;
@@ -10,39 +12,20 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct LogService {
     log_repository: Arc<LogRepository>,
-    schema_repository: Arc<SchemaRepository>,
 }
 
 impl LogService {
-    pub fn new(
-        log_repository: Arc<LogRepository>,
-        schema_repository: Arc<SchemaRepository>,
-    ) -> Self {
-        Self {
-            log_repository,
-            schema_repository,
-        }
+    pub fn new(log_repository: Arc<LogRepository>) -> Self {
+        Self { log_repository }
     }
 
-    pub async fn get_logs_by_schema_name_and_id(
+    pub async fn get_logs_by_schema_id(
         &self,
-        name: &str,
-        version: &str,
-        filters: Option<Value>,
+        schema_id: Uuid,
+        query_params: QueryParams,
     ) -> AppResult<Vec<Log>> {
-        let schema = self
-            .schema_repository
-            .get_by_name_and_version(name, version)
-            .await?;
-        if schema.is_none() {
-            return Err(AppError::NotFound(format!(
-                "Schema with name:version '{}:{}' not found",
-                name, version
-            )));
-        }
-
         self.log_repository
-            .get_by_schema_id(schema.unwrap().id, filters)
+            .get_by_schema_id(schema_id, query_params)
             .await
     }
 
@@ -51,19 +34,6 @@ impl LogService {
     }
 
     pub async fn create_log(&self, schema_id: Uuid, log_data: Value) -> AppResult<Log> {
-        let schema = self.schema_repository.get_by_id(schema_id).await?;
-        let schema = match schema {
-            Some(s) => s,
-            None => {
-                return Err(AppError::NotFound(format!(
-                    "Schema with id '{}' not found",
-                    schema_id
-                )))
-            }
-        };
-
-        self.validate_log_against_schema(&log_data, &schema.schema_definition)?;
-
         let log = Log {
             id: 0, // This will be set by the database
             schema_id,
@@ -71,35 +41,90 @@ impl LogService {
             created_at: Utc::now(),
         };
 
-        self.log_repository.create(&log).await
+        match self.log_repository.create(&log).await {
+            Ok(log) => Ok(log),
+            Err(e) => {
+                let error_string = e.to_string();
+                if error_string.contains("foreign key constraint")
+                    || error_string.contains("violates foreign key")
+                    || error_string.contains("fk_logs_schema_id")
+                {
+                    Err(crate::error::AppError::NotFound(format!(
+                        "Schema with id '{}' not found",
+                        schema_id
+                    )))
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     pub async fn delete_log(&self, id: i32) -> AppResult<bool> {
         self.log_repository.delete(id).await
     }
 
-    fn validate_log_against_schema(
+    pub async fn count_logs_by_schema_id(
         &self,
-        log_data: &Value,
-        schema_definition: &Value,
-    ) -> AppResult<()> {
-        let validator = jsonschema::ValidationOptions::default()
-            .with_draft(jsonschema::Draft::Draft7)
-            .build(schema_definition)
-            .map_err(|e| AppError::InternalError(format!("Invalid JSON schema: {}", e)))?;
+        schema_id: Uuid,
+        query_params: &QueryParams,
+    ) -> AppResult<i64> {
+        self.log_repository
+            .count_by_schema_id_with_filters_and_dates(
+                schema_id,
+                query_params.filters.clone(),
+                query_params.date_begin,
+                query_params.date_end,
+            )
+            .await
+    }
 
-        let errors: Vec<_> = validator
-            .iter_errors(log_data)
-            .map(|e| format!("Validation error at '{}': {}", e.instance_path, e))
-            .collect();
+    pub async fn get_paginated_logs(
+        &self,
+        schema_id: Uuid,
+        query_params: QueryParams,
+    ) -> AppResult<PaginatedLogsResponse> {
+        let logs = self
+            .log_repository
+            .get_by_schema_id(schema_id, query_params.clone())
+            .await?;
 
-        if errors.is_empty() {
-            Ok(())
+        let total = self
+            .log_repository
+            .count_by_schema_id_with_filters_and_dates(
+                schema_id,
+                query_params.filters.clone(),
+                query_params.date_begin,
+                query_params.date_end,
+            )
+            .await?;
+
+        let log_responses: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
+
+        let total_pages = if query_params.limit > 0 {
+            ((total as f64) / (query_params.limit as f64)).ceil() as i32
         } else {
-            Err(AppError::SchemaValidationError(format!(
-                "Schema validation failed: {}",
-                errors.join("; ")
-            )))
-        }
+            0
+        };
+
+        let timewindow = if query_params.date_begin.is_some() || query_params.date_end.is_some() {
+            Some(TimeWindowMetadata {
+                date_begin: query_params.date_begin,
+                date_end: query_params.date_end,
+            })
+        } else {
+            None
+        };
+
+        Ok(PaginatedLogsResponse {
+            logs: log_responses,
+            timewindow,
+            pagination: PaginationMetadata {
+                page: query_params.page,
+                limit: query_params.limit,
+                total,
+                total_pages,
+            },
+        })
     }
 }

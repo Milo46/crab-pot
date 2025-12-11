@@ -9,6 +9,32 @@ use serde_json::Value;
 use std::sync::Arc;
 use uuid::Uuid;
 
+#[derive(Debug, Clone)]
+pub struct SchemaNameVersion {
+    pub name: String,
+    pub version: Option<String>,
+}
+
+impl SchemaNameVersion {
+    pub fn new(name: String, version: Option<String>) -> Self {
+        Self { name, version }
+    }
+
+    pub fn with_version(name: String, version: String) -> Self {
+        Self {
+            name,
+            version: Some(version),
+        }
+    }
+
+    pub fn latest(name: String) -> Self {
+        Self {
+            name,
+            version: None,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct SchemaService {
     repository: Arc<SchemaRepository>,
@@ -23,6 +49,56 @@ impl SchemaService {
         }
     }
 
+    pub async fn resolve_schema(&self, schema_ref: &SchemaNameVersion) -> AppResult<Schema> {
+        let schema = match &schema_ref.version {
+            Some(version) => {
+                self.repository
+                    .get_by_name_and_version(&schema_ref.name, version)
+                    .await?
+            }
+            None => self.repository.get_by_name_latest(&schema_ref.name).await?,
+        };
+
+        schema.ok_or_else(|| {
+            let version_str = schema_ref.version.as_deref().unwrap_or("latest");
+            AppError::NotFound(format!(
+                "Schema with name:version '{}:{}' not found",
+                schema_ref.name, version_str
+            ))
+        })
+    }
+
+    pub async fn get_schema_id(&self, schema_ref: &SchemaNameVersion) -> AppResult<uuid::Uuid> {
+        let schema = self.resolve_schema(schema_ref).await?;
+        Ok(schema.id)
+    }
+
+    pub async fn validate_log_data(&self, schema_id: Uuid, log_data: &Value) -> AppResult<()> {
+        let schema = self.get_schema_by_id(schema_id).await?;
+        let schema = schema.ok_or_else(|| {
+            AppError::NotFound(format!("Schema with id '{}' not found", schema_id))
+        })?;
+
+        let validator = jsonschema::ValidationOptions::default()
+            .with_draft(jsonschema::Draft::Draft7)
+            .build(&schema.schema_definition)
+            .map_err(|e| AppError::InternalError(format!("Invalid JSON schema: {}", e)))?;
+
+        let errors: Vec<_> = validator
+            .iter_errors(log_data)
+            .map(|e| format!("Validation error at '{}': {}", e.instance_path, e))
+            .collect();
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(AppError::SchemaValidationError(format!(
+                "Schema validation failed: {}",
+                errors.join("; ")
+            )))
+        }
+    }
+
     pub async fn get_all_schemas(
         &self,
         params: Option<SchemaQueryParams>,
@@ -32,6 +108,10 @@ impl SchemaService {
 
     pub async fn get_schema_by_id(&self, id: Uuid) -> AppResult<Option<Schema>> {
         self.repository.get_by_id(id).await
+    }
+
+    pub async fn get_schema_by_name(&self, name: &str) -> AppResult<Option<Schema>> {
+        self.repository.get_by_name_latest(name).await
     }
 
     pub async fn get_by_name_and_version(
@@ -140,7 +220,6 @@ impl SchemaService {
         self.repository.delete(id).await
     }
 
-    // Business logic: validate schema definition against JSON Schema meta-schema
     fn validate_schema_definition(&self, schema_definition: &Value) -> AppResult<()> {
         if !schema_definition.is_object() {
             return Err(AppError::ValidationError(

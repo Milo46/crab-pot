@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -8,6 +9,28 @@ use crate::Log;
 pub struct CreateLogRequest {
     pub schema_id: Uuid,
     pub log_data: Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PaginationMetadata {
+    pub page: i32,
+    pub limit: i32,
+    pub total: i64,
+    pub total_pages: i32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TimeWindowMetadata {
+    pub date_begin: Option<DateTime<Utc>>,
+    pub date_end: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PaginatedLogsResponse {
+    pub logs: Vec<LogResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timewindow: Option<TimeWindowMetadata>,
+    pub pagination: PaginationMetadata,
 }
 
 #[derive(Debug, Serialize)]
@@ -27,6 +50,45 @@ impl From<Log> for LogResponse {
             created_at: log.created_at.to_rfc3339(),
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct QueryLogsRequest {
+    #[serde(default = "default_page")]
+    pub page: i32,
+    #[serde(default = "default_limit")]
+    pub limit: i32,
+    pub date_begin: Option<DateTime<Utc>>,
+    pub date_end: Option<DateTime<Utc>>,
+    pub filters: Option<Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct QueryParams {
+    pub page: i32,
+    pub limit: i32,
+    pub date_begin: Option<DateTime<Utc>>,
+    pub date_end: Option<DateTime<Utc>>,
+    pub filters: Option<Value>,
+}
+
+impl From<QueryLogsRequest> for QueryParams {
+    fn from(req: QueryLogsRequest) -> Self {
+        Self {
+            page: req.page,
+            limit: req.limit,
+            date_begin: req.date_begin,
+            date_end: req.date_end,
+            filters: req.filters,
+        }
+    }
+}
+
+fn default_page() -> i32 {
+    1
+}
+fn default_limit() -> i32 {
+    10
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

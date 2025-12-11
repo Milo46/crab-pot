@@ -3,63 +3,84 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde_json::{json, Value};
-use std::collections::HashMap;
 
 use crate::{
-    dto::{CreateLogRequest, ErrorResponse, LogEvent, LogResponse},
+    dto::{
+        log_dto::QueryParams, CreateLogRequest, ErrorResponse, LogEvent, LogResponse,
+        PaginatedLogsResponse, QueryLogsRequest,
+    },
+    services::schema_service::SchemaNameVersion,
     AppState,
 };
 
-pub async fn get_logs_default(
+pub async fn get_logs_by_name(
     State(state): State<AppState>,
     Path(schema_name): Path<String>,
-    Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
-    get_logs(
-        State(state),
-        Path((schema_name, "1.0.0".to_string())),
-        Query(params),
-    )
-    .await
+    Query(params): Query<QueryLogsRequest>,
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    get_logs_internal(state, schema_name, None, params).await
 }
 
-pub async fn get_logs(
+pub async fn get_logs_by_name_and_version(
     State(state): State<AppState>,
     Path((schema_name, schema_version)): Path<(String, String)>,
-    Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<Value>, (StatusCode, Json<ErrorResponse>)> {
-    if schema_name.trim().is_empty() || schema_version.trim().is_empty() {
+    Query(params): Query<QueryLogsRequest>,
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    get_logs_internal(state, schema_name, Some(schema_version), params).await
+}
+
+async fn get_logs_internal(
+    state: AppState,
+    schema_name: String,
+    schema_version: Option<String>,
+    params: QueryLogsRequest,
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    if schema_name.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse::new(
                 "INVALID_INPUT",
-                "Schema name or version cannot be empty",
+                "Schema name cannot be empty",
             )),
         ));
     }
 
-    let filters: Option<Value> = if params.is_empty() {
-        None
-    } else {
-        let mut filter_obj = serde_json::Map::new();
-        for (key, value) in params {
-            let json_value = serde_json::from_str::<Value>(&value).unwrap_or(Value::String(value));
-            filter_obj.insert(key, json_value);
+    if let Some(ref version) = schema_version {
+        if version.trim().is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "INVALID_INPUT",
+                    "Schema version cannot be empty",
+                )),
+            ));
         }
-        Some(Value::Object(filter_obj))
+    }
+
+    let query_params: QueryParams = params.into();
+    let schema_ref = SchemaNameVersion::new(schema_name.clone(), schema_version.clone());
+
+    let schema = match state.schema_service.resolve_schema(&schema_ref).await {
+        Ok(schema) => schema,
+        Err(e) => {
+            let status_code = if e.to_string().contains("not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            return Err((
+                status_code,
+                Json(ErrorResponse::new("SCHEMA_NOT_FOUND", e.to_string())),
+            ));
+        }
     };
 
     match state
         .log_service
-        .get_logs_by_schema_name_and_id(&schema_name, &schema_version, filters)
+        .get_paginated_logs(schema.id, query_params)
         .await
     {
-        Ok(logs) => {
-            let log_responses: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
-
-            Ok(Json(json!({ "logs": log_responses })))
-        }
+        Ok(response) => Ok(Json(response)),
         Err(e) => {
             let status_code = if e.to_string().contains("not found") {
                 StatusCode::NOT_FOUND
@@ -69,7 +90,90 @@ pub async fn get_logs(
 
             Err((
                 status_code,
-                Json(ErrorResponse::new("NOT_FOUND", e.to_string())),
+                Json(ErrorResponse::new("FETCH_FAILED", e.to_string())),
+            ))
+        }
+    }
+}
+
+pub async fn query_logs_by_name(
+    State(state): State<AppState>,
+    Path(schema_name): Path<String>,
+    Json(payload): Json<QueryLogsRequest>,
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    query_logs_internal(state, schema_name, None, payload).await
+}
+
+pub async fn query_logs_by_name_and_version(
+    State(state): State<AppState>,
+    Path((schema_name, schema_version)): Path<(String, String)>,
+    Json(payload): Json<QueryLogsRequest>,
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    query_logs_internal(state, schema_name, Some(schema_version), payload).await
+}
+
+async fn query_logs_internal(
+    state: AppState,
+    schema_name: String,
+    schema_version: Option<String>,
+    payload: QueryLogsRequest,
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    if schema_name.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "INVALID_INPUT",
+                "Schema name cannot be empty",
+            )),
+        ));
+    }
+
+    if let Some(ref version) = schema_version {
+        if version.trim().is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "INVALID_INPUT",
+                    "Schema version cannot be empty",
+                )),
+            ));
+        }
+    }
+
+    let query_params: QueryParams = payload.into();
+    let schema_ref = SchemaNameVersion::new(schema_name.clone(), schema_version.clone());
+
+    let schema = match state.schema_service.resolve_schema(&schema_ref).await {
+        Ok(schema) => schema,
+        Err(e) => {
+            let status_code = if e.to_string().contains("not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            return Err((
+                status_code,
+                Json(ErrorResponse::new("SCHEMA_NOT_FOUND", e.to_string())),
+            ));
+        }
+    };
+
+    match state
+        .log_service
+        .get_paginated_logs(schema.id, query_params)
+        .await
+    {
+        Ok(response) => Ok(Json(response)),
+        Err(e) => {
+            let status_code = if e.to_string().contains("not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+
+            Err((
+                status_code,
+                Json(ErrorResponse::new("FETCH_FAILED", e.to_string())),
             ))
         }
     }
