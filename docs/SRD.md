@@ -6,26 +6,35 @@
 - [2. Purpose of the project](#2-purpose-of-the-project)
 - [3. Use Case](#3-use-case)
 - [4. Functional Requirements](#4-functional-requirements)
-  - [4.1 POST /schemas](#41-post-schemas)
-  - [4.2 GET /schemas](#42-get-schemas)
-  - [4.2.1 GET /schemas/{id}](#421-get-schemasid)
-  - [4.3 POST /logs](#43-post-logs)
-  - [4.4 GET /logs](#44-get-logs)
-  - [4.4.1 GET /logs/schema/{schema_name}](#441-get-logsschemaschema_name)
-  - [4.4.2 GET /logs/schema/{schema_name}/{version}](#442-get-logsschemaschema_nameversion)
-  - [4.4.3 GET /logs/{id}](#443-get-logsid)
-  - [4.5 PUT /schemas/{id}](#45-put-schemasid)
-  - [4.6 DELETE /schemas/{id}](#46-delete-schemasid)
-  - [4.7 DELETE /logs/{id}](#47-delete-logsid)
-  - [4.8 GET /health](#48-get-health)
-  - [4.9 Request Tracking](#49-request-tracking)
-  - [4.10 Error Handling](#410-error-handling)
-- [5. Non-Functional Requirements](#5-non-functional-requirements)
-- [6. System Architecture](#6-system-architecture)
-- [7. Data Models](#7-data-models)
-- [8. API Specification](#8-api-specification)
-- [9. Version Information](#9-version-information)
-- [10. Future Improvements](#10-future-improvements)
+  - [4.1 Schema Management](#41-schema-management)
+  - [4.2 Log Management](#42-log-management)
+  - [4.3 Query & Filtering](#43-query--filtering)
+  - [4.4 Real-time Events](#44-real-time-events)
+  - [4.5 System Operations](#45-system-operations)
+- [5. API Endpoints](#5-api-endpoints)
+  - [5.1 POST /schemas](#51-post-schemas)
+  - [5.2 GET /schemas](#52-get-schemas)
+  - [5.3 GET /schemas/{id}](#53-get-schemasid)
+  - [5.4 GET /schemas/{schema_name}/versions/{schema_version}](#54-get-schemasschema_nameversionsschema_version)
+  - [5.5 PUT /schemas/{id}](#55-put-schemasid)
+  - [5.6 DELETE /schemas/{id}](#56-delete-schemasid)
+  - [5.7 POST /logs](#57-post-logs)
+  - [5.8 GET /logs/schema/{schema_name}](#58-get-logsschemaschema_name)
+  - [5.9 GET /logs/schema/{schema_name}/versions/{schema_version}](#59-get-logsschemaschema_nameversionsschema_version)
+  - [5.10 POST /logs/schema/{schema_name}/query](#510-post-logsschemaschema_namequery)
+  - [5.11 POST /logs/schema/{schema_name}/versions/{schema_version}/query](#511-post-logsschemaschema_nameversionsschema_versionquery)
+  - [5.12 GET /logs/{id}](#512-get-logsid)
+  - [5.13 DELETE /logs/{id}](#513-delete-logsid)
+  - [5.14 GET /ws/logs](#514-get-wslogs)
+  - [5.15 GET /health](#515-get-health)
+  - [5.16 Request Tracking](#516-request-tracking)
+  - [5.17 Error Handling](#517-error-handling)
+- [6. Non-Functional Requirements](#6-non-functional-requirements)
+- [7. System Architecture](#7-system-architecture)
+- [8. Data Models](#8-data-models)
+- [9. API Specification](#9-api-specification)
+- [10. Version Information](#10-version-information)
+- [11. Future Improvements](#11-future-improvements)
 
 ## 1. Short description
 
@@ -65,7 +74,81 @@ Benefits:
 
 ## 4. Functional Requirements
 
-### 4.1 POST /schemas
+This section defines the functional requirements using testable, verifiable statements. Each requirement is identified with a unique FR-XXX code for traceability.
+
+### 4.1 Schema Management
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-101 | The system SHALL allow users to create log schemas with a name, version, description, and JSON Schema definition | Must |
+| FR-102 | The system SHALL enforce unique combinations of schema name and version | Must |
+| FR-103 | The system SHALL validate that schema definitions conform to JSON Schema Draft 7 specification | Must |
+| FR-104 | The system SHALL generate a UUID for each newly created schema | Must |
+| FR-105 | The system SHALL allow users to retrieve all registered schemas | Must |
+| FR-106 | The system SHALL allow filtering schemas by name and/or version | Should |
+| FR-107 | The system SHALL allow users to retrieve a specific schema by UUID | Must |
+| FR-108 | The system SHALL allow users to retrieve a specific schema by name and version | Must |
+| FR-109 | The system SHALL allow users to update an existing schema by UUID | Must |
+| FR-110 | The system SHALL allow users to delete a schema by UUID | Must |
+| FR-111 | The system SHALL prevent deletion of schemas that have associated logs unless force flag is provided | Must |
+| FR-112 | The system SHALL cascade delete all associated logs when force deletion is requested | Should |
+| FR-113 | The system SHALL automatically resolve "latest" version when only schema name is provided | Must |
+
+### 4.2 Log Management
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-201 | The system SHALL allow users to create log entries referencing a schema by UUID | Must |
+| FR-202 | The system SHALL validate log data against the referenced schema before storage | Must |
+| FR-203 | The system SHALL reject log entries that do not conform to their schema with descriptive errors | Must |
+| FR-204 | The system SHALL reject log entries referencing non-existent schema UUIDs | Must |
+| FR-205 | The system SHALL store log entries with automatic timestamps | Must |
+| FR-206 | The system SHALL allow users to retrieve log entries by schema name (using latest version) | Must |
+| FR-207 | The system SHALL allow users to retrieve log entries by schema name and specific version | Must |
+| FR-208 | The system SHALL allow users to retrieve a specific log entry by numeric ID | Must |
+| FR-209 | The system SHALL allow users to delete a specific log entry by ID | Must |
+
+### 4.3 Query & Filtering
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-301 | The system SHALL support pagination with configurable page number and limit | Must |
+| FR-302 | The system SHALL return pagination metadata (page, limit, total, total_pages) in responses | Must |
+| FR-303 | The system SHALL support filtering logs by date range (date_begin, date_end) | Must |
+| FR-304 | The system SHALL return timewindow metadata when date filters are applied | Should |
+| FR-305 | The system SHALL support filtering logs by exact field matching using JSONB containment | Must |
+| FR-306 | The system SHALL apply multiple filters using AND logic | Must |
+| FR-307 | The system SHALL perform filtering at the database level using appropriate indexes | Should |
+| FR-308 | The system SHALL support complex queries via POST endpoints with JSON body | Should |
+
+### 4.4 Real-time Events
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-401 | The system SHALL provide a WebSocket endpoint for real-time log events | Should |
+| FR-402 | The system SHALL broadcast log creation events to connected WebSocket clients | Should |
+| FR-403 | The system SHALL broadcast log deletion events to connected WebSocket clients | Should |
+
+### 4.5 System Operations
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-501 | The system SHALL provide a health check endpoint returning service status | Must |
+| FR-502 | The system SHALL include a timestamp in health check responses | Should |
+| FR-503 | The system SHALL support request tracking via X-Request-ID header | Must |
+| FR-504 | The system SHALL generate a UUID for requests without X-Request-ID header | Must |
+| FR-505 | The system SHALL echo the X-Request-ID in all responses | Must |
+| FR-506 | The system SHALL include request IDs in all server logs for correlation | Should |
+| FR-507 | The system SHALL return appropriate HTTP status codes for all error conditions | Must |
+| FR-508 | The system SHALL return descriptive error messages in a consistent JSON format | Must |
+
+---
+
+## 5. API Endpoints
+
+This section provides detailed API endpoint documentation including request/response formats and examples.
+
+### 5.1 POST /schemas
 
 * Accepts a JSON Schema definition that will be used to validate log entries
 * Required fields: `name`, `version`, `schema_definition`
@@ -113,7 +196,7 @@ Benefits:
     }
     ```
 
-### 4.2 GET /schemas
+### 5.2 GET /schemas
 
 * Retrieves all registered schemas with optional filtering
 * Query parameters (all optional):
@@ -123,14 +206,14 @@ Benefits:
 * Filtering is performed at the database level for optimal performance
 * Example: `GET /schemas?name=web-server-logs&version=1.0.0`
 
-### 4.2.1 GET /schemas/{id}
+### 5.3 GET /schemas/{id}
 
 * Retrieves a specific schema by its UUID
 * Path parameter `id`: The UUID of the schema
 * Returns HTTP 200 with schema object
 * Returns HTTP 404 if schema not found
 
-### 4.2.2 GET /schemas/{schema_name}/{schema_version}
+### 5.4 GET /schemas/{schema_name}/versions/{schema_version}
 
 * Retrieves a specific schema by its combined and name and version
 * Path parameters:
@@ -139,7 +222,7 @@ Benefits:
 * Returns HTTP 200 with schema object
 * Returns HTTP 404 if schema not found
 
-### 4.3 POST /logs
+### 5.5 POST /logs
 
 * Accepts a JSON object representing a single log entry with schema reference
 * Required fields in request body:
@@ -166,27 +249,107 @@ Benefits:
     }
     ```
 
-### 4.4 GET /logs
+### 5.6 GET /logs
 
 * Retrieves stored log entries with filtering capabilities
 
-#### 4.4.1 GET /logs/schema/{schema_name}
+#### 5.6.1 GET /logs/schema/{schema_name}
 
-* Get all logs for a specific schema by name (uses latest version, defaults to 1.0.0)
+* Get all logs for a specific schema by name (resolves to latest version)
 * Path parameter `schema_name`: The name of the schema
-* Query parameters: Any top-level JSONB field for exact-match filtering
-* Example: `GET /logs/schema/temperature-readings?location=desk-thermometer&temperature=22.5`
+* Query parameters (all optional):
+  * `filters`: Full JSON object for exact-match filtering (encoding the special symbols is necessary)
+  * `page`: Number of the page to retrieve (default: 1)
+  * `limit`: Number of entries per page (default: 10)
+  * `date_begin`: Lower bound for `created_at` filter (ISO 8601 format)
+  * `date_end`: Upper bound for `created_at` filter (ISO 8601 format)
+* Example: `GET /logs/schema/temperature-readings?page=2&limit=10`
+* Example: `GET /logs/schema/temperature-readings?date_begin=2025-01-01T10:00:00Z&date_end=2025-01-01T11:00:00Z`
 
-#### 4.4.2 GET /logs/schema/{schema_name}/{schema_version}
+#### 5.6.2 GET /logs/schema/{schema_name}/versions/{schema_version}
 
 * Get all logs for a specific schema name and version
 * Path parameters:
   * `schema_name`: The name of the schema
-  * `schema_version`: The specific version
-* Query parameters: Any top-level JSONB field for exact-match filtering
-* Example: `GET /logs/schema/web-server-logs/1.0.0?level=ERROR&user_id=user-123`
+  * `schema_version`: The specific version (e.g., "1.0.0")
+* Query parameters (all optional):
+  * `filters`: Full JSON object for exact-match filtering (encoding the special symbols is necessary)
+  * `page`: Number of the page to retrieve (default: 1)
+  * `limit`: Number of entries per page (default: 10)
+  * `date_begin`: Lower bound for `created_at` filter (ISO 8601 format)
+  * `date_end`: Upper bound for `created_at` filter (ISO 8601 format)
+* Example: `GET /logs/schema/temperature-readings/versions/1.0.0?page=2&limit=10`
 
-#### 4.4.3 GET /logs/{id}
+#### 5.6.3 POST /logs/schema/{schema_name}/query
+
+* Get all logs for a specific schema name (latest version) with complex query
+* Accepts a JSON object representing query parameters
+* Path parameter `schema_name`: The name of the schema
+* Example request:
+
+    ```json
+    {
+        "page": 1,
+        "limit": 10,
+        "date_begin": "2025-12-01T00:00:00Z",
+        "date_end": "2025-12-01T23:59:59Z",
+        "filters": {
+            "level": "INFO"
+        }
+    }
+    ```
+
+#### 5.6.4 POST /logs/schema/{schema_name}/versions/{schema_version}/query
+
+* Get all logs for a specific schema name and version with complex query
+* Accepts a JSON object representing query parameters
+* Path parameters:
+  * `schema_name`: The name of the schema
+  * `schema_version`: The specific version of the schema
+* Example request:
+
+    ```json
+    {
+        "page": 1,
+        "limit": 10,
+        "date_begin": "2025-12-01T00:00:00Z",
+        "date_end": "2025-12-01T23:59:59Z",
+        "filters": {
+            "level": "INFO"
+        }
+    }
+    ```
+
+#### 5.6.5 Paginated Response Format
+
+All log query endpoints return a paginated response:
+
+```json
+{
+    "logs": [
+        {
+            "id": 123,
+            "schema_id": "550e8400-e29b-41d4-a716-446655440000",
+            "log_data": { ... },
+            "created_at": "2025-10-23T10:00:01Z"
+        }
+    ],
+    "timewindow": {
+        "date_begin": "2025-12-01T00:00:00Z",
+        "date_end": "2025-12-01T23:59:59Z"
+    },
+    "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 42,
+        "total_pages": 5
+    }
+}
+```
+
+**Note:** The `timewindow` field is only included when date filters are applied.
+
+#### 5.6.6 GET /logs/{id}
 
 * Retrieve a specific log entry by its numeric ID
 * Path parameter `id`: The log entry ID
@@ -199,7 +362,7 @@ Benefits:
 * Multiple query parameters use AND logic
 * All filtering performed at database level using GIN index
 
-### 4.5 PUT /schemas/{id}
+### 5.7 PUT /schemas/{id}
 
 * Update an existing schema by UUID
 * Path parameter `id`: The UUID of the schema to update
@@ -207,7 +370,7 @@ Benefits:
 * Returns HTTP 200 with updated schema
 * Returns HTTP 404 if schema not found
 
-### 4.6 DELETE /schemas/{id}
+### 5.8 DELETE /schemas/{id}
 
 * Delete a schema by UUID
 * Path parameter `id`: The UUID of the schema to delete
@@ -217,14 +380,47 @@ Benefits:
 * Returns HTTP 404 if schema not found
 * Note: Consider cascade deletion or orphan log handling
 
-### 4.7 DELETE /logs/{id}
+### 5.9 DELETE /logs/{id}
 
 * Delete a specific log entry by ID
 * Path parameter `id`: The numeric ID of the log entry
 * Returns HTTP 204 (No Content) on success
 * Returns HTTP 404 if log not found
+* Broadcasts deletion event to WebSocket clients
 
-### 4.8 GET /health
+### 5.10 GET /ws/logs
+
+* WebSocket endpoint for real-time log event streaming
+* Clients receive notifications when logs are created or deleted
+* Connection URL: `ws://localhost:8080/ws/logs`
+
+**Event Types:**
+
+Log Created Event:
+```json
+{
+    "event": "log_created",
+    "data": {
+        "id": 123,
+        "schema_id": "550e8400-e29b-41d4-a716-446655440000",
+        "log_data": { ... },
+        "created_at": "2025-10-23T10:00:01Z"
+    }
+}
+```
+
+Log Deleted Event:
+```json
+{
+    "event": "log_deleted",
+    "data": {
+        "id": 123,
+        "schema_id": "550e8400-e29b-41d4-a716-446655440000"
+    }
+}
+```
+
+### 5.11 GET /health
 
 * Health check endpoint for monitoring and load balancers
 * Also available at `GET /` (root path)
@@ -239,7 +435,7 @@ Benefits:
     }
     ```
 
-### 4.9 Request Tracking
+### 5.12 Request Tracking
 
 All API endpoints support request tracking through the `X-Request-ID` header for distributed tracing and debugging.
 
@@ -295,7 +491,7 @@ Content-Type: application/json
 * Log format: `[request_id=<id>] <log message>`
 * Enables quick filtering and debugging of specific requests
 
-### 4.10 Error Handling
+### 5.13 Error Handling
 
 * HTTP 400: Invalid JSON, missing required fields, or invalid schema_id
 * HTTP 422: Valid JSON but fails schema validation (for logs) or invalid JSON Schema (for schemas)
@@ -304,39 +500,39 @@ Content-Type: application/json
 * All error responses include descriptive error messages and validation details
 * All error responses include the `X-Request-ID` header for debugging
 
-## 5. Non-Functional Requirements
+## 6. Non-Functional Requirements
 
-### 5.1 Performance
+### 6.1 Performance
 
 * Handle at least 1000 requests per second under normal load
 * Database queries should complete within 100ms for typical operations
 * Memory usage should remain stable under continuous operation
 
-### 5.2 Reliability
+### 6.2 Reliability
 
 * Service should have 99.9% uptime during normal operations
 * Graceful handling of database connection failures
 * Proper error logging and recovery mechanisms
 
-### 5.3 Security
+### 6.3 Security
 
 * Input validation for all endpoints
 * SQL injection prevention through parameterized queries
 * Rate limiting to prevent abuse (configurable)
 
-### 5.4 Scalability
+### 6.4 Scalability
 
 * Stateless service design for horizontal scaling
 * Database connection pooling for efficient resource usage
 * Container-ready for orchestration platforms
 
-### 5.5 Maintainability
+### 6.5 Maintainability
 
 * Clean, documented code following Rust best practices
 * Comprehensive error handling and logging
 * Configuration via environment variables
 
-## 6. System Architecture
+## 7. System Architecture
 
 Components:
 
@@ -344,7 +540,7 @@ Components:
 * `db`: PostgreSQL database container storing logs.
 * `docker-compose.yml`: Defines both services, volumes and internal network.
 
-### 6.1 Technology Stack
+### 7.1 Technology Stack
 
 * **Backend**: Rust with Axum web framework
 * **Database**: PostgreSQL 15+
@@ -352,15 +548,15 @@ Components:
 * **Serialization**: JSON with serde
 * **Database Access**: SQLx for async PostgreSQL operations
 
-### 6.2 Network Architecture
+### 7.2 Network Architecture
 
 * Internal Docker network for app-database communication
 * Exposed HTTP port (default: 8080) for external API access
 * Database port not exposed externally for security
 
-## 7. Data Models
+## 8. Data Models
 
-### 7.1 Database Schema
+### 8.1 Database Schema
 
 ```sql
 -- Table for storing user-defined schemas
@@ -393,7 +589,7 @@ CREATE INDEX idx_schemas_name_version ON schemas(name, version);
 CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
 ```
 
-### 7.2 API Response Models
+### 8.2 API Response Models
 
 **Schema Response:**
 
@@ -454,19 +650,19 @@ CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
 }
 ```
 
-## 8. API Specification
+## 9. API Specification
 
-### 8.1 Base URL
+### 9.1 Base URL
 
 * Development: `http://localhost:8080`
 * Production: Configurable via environment variables
 
-### 8.2 Content Types
+### 9.2 Content Types
 
 * Request: `application/json`
 * Response: `application/json`
 
-### 8.3 Request Headers
+### 9.3 Request Headers
 
 **Standard Headers:**
 * `Content-Type: application/json` (required for POST/PUT requests)
@@ -479,7 +675,7 @@ CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
 * `X-Request-ID: <request-id>` (always present)
   * Echoes client-provided value or contains server-generated UUID
 
-### 8.4 Authentication
+### 9.4 Authentication
 
 * **Current (v1.0.0)**: No authentication implemented
   * All endpoints are publicly accessible
@@ -495,20 +691,20 @@ CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
   * Role-based access control (RBAC)
   * Multi-tenant support
 
-### 8.5 Rate Limiting
+### 9.5 Rate Limiting
 
 * Default: 1000 requests per minute per IP
 * Configurable via environment variables
 * Returns HTTP 429 when exceeded
 
-### 8.6 Schema Validation
+### 9.6 Schema Validation
 
 * All log entries must conform to a pre-registered schema
 * JSON Schema Draft 7 specification is used for validation
 * Schemas are versioned to support evolution over time
 * Invalid log entries are rejected with detailed error messages
 
-## 9. Version Information
+## 10. Version Information
 
 * **Current Version**: 1.0.0
 * **API Version**: v1
@@ -519,16 +715,16 @@ CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
   * Docker 20.10+
   * Docker Compose 2.0+
 
-### 9.1 Versioning Strategy
+### 10.1 Versioning Strategy
 
 * Semantic versioning (MAJOR.MINOR.PATCH)
 * API versioning through URL path (`/api/v1/`)
 * Database migrations for schema changes
 * Backward compatibility maintained within major versions
 
-## 10. Future Improvements
+## 11. Future Improvements
 
-### 10.1 Phase 2 Features
+### 11.1 Phase 2 Features
 
 * **Authentication & Authorization**
   * JWT-based authentication
@@ -546,7 +742,7 @@ CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
   * Health check with detailed component status
   * Distributed tracing integration (OpenTelemetry)
 
-### 10.2 Phase 3 Features
+### 11.2 Phase 3 Features
 
 * **Data Management**
   * Log retention policies
@@ -563,7 +759,7 @@ CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
   * Integration with popular log aggregation tools
   * Export capabilities (CSV, JSON, etc.)
 
-### 10.3 Operational Improvements
+### 11.3 Operational Improvements
 
 * **Deployment**
   * Kubernetes manifests
