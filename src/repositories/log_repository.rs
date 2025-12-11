@@ -4,9 +4,9 @@ use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::dto::log_dto::QueryParams;
 use crate::error::AppResult;
 use crate::models::Log;
-use crate::dto::log_dto::QueryParams;
 
 #[async_trait]
 pub trait LogRepositoryTrait {
@@ -53,7 +53,11 @@ impl LogRepositoryTrait for LogRepository {
         query_params: QueryParams,
     ) -> AppResult<Vec<Log>> {
         let offset = (query_params.page - 1) * query_params.limit;
-        let has_filters = query_params.filters.as_ref().and_then(|f| f.as_object()).is_some();
+        let has_filters = query_params
+            .filters
+            .as_ref()
+            .and_then(|f| f.as_object())
+            .is_some();
         let has_dates = query_params.date_begin.is_some() && query_params.date_end.is_some();
 
         let logs = match (has_filters, has_dates) {

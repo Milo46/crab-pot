@@ -6,90 +6,81 @@ use axum::{
 
 use crate::{
     dto::{
-        log_dto::{TimeWindowMetadata, QueryParams}, CreateLogRequest, ErrorResponse, LogEvent, LogResponse,
-        PaginatedLogsResponse, PaginationMetadata, QueryLogsRequest,
+        log_dto::QueryParams, CreateLogRequest, ErrorResponse, LogEvent, LogResponse,
+        PaginatedLogsResponse, QueryLogsRequest,
     },
+    services::schema_service::SchemaNameVersion,
     AppState,
 };
 
-pub async fn get_logs_default(
+pub async fn get_logs_by_name(
     State(state): State<AppState>,
     Path(schema_name): Path<String>,
     Query(params): Query<QueryLogsRequest>,
 ) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
-    get_logs(
-        State(state),
-        Path((schema_name, "1.0.0".to_string())),
-        Query(params),
-    )
-    .await
+    get_logs_internal(state, schema_name, None, params).await
 }
 
-pub async fn get_logs(
+pub async fn get_logs_by_name_and_version(
     State(state): State<AppState>,
     Path((schema_name, schema_version)): Path<(String, String)>,
-    Query(payload): Query<QueryLogsRequest>,
+    Query(params): Query<QueryLogsRequest>,
 ) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
-    if schema_name.trim().is_empty() || schema_version.trim().is_empty() {
+    get_logs_internal(state, schema_name, Some(schema_version), params).await
+}
+
+async fn get_logs_internal(
+    state: AppState,
+    schema_name: String,
+    schema_version: Option<String>,
+    params: QueryLogsRequest,
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    if schema_name.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse::new(
                 "INVALID_INPUT",
-                "Schema name or version cannot be empty",
+                "Schema name cannot be empty",
             )),
         ));
     }
 
-    let query_params: QueryParams = payload.into();
+    if let Some(ref version) = schema_version {
+        if version.trim().is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "INVALID_INPUT",
+                    "Schema version cannot be empty",
+                )),
+            ));
+        }
+    }
+
+    let query_params: QueryParams = params.into();
+    let schema_ref = SchemaNameVersion::new(schema_name.clone(), schema_version.clone());
+
+    let schema = match state.schema_service.resolve_schema(&schema_ref).await {
+        Ok(schema) => schema,
+        Err(e) => {
+            let status_code = if e.to_string().contains("not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            return Err((
+                status_code,
+                Json(ErrorResponse::new("SCHEMA_NOT_FOUND", e.to_string())),
+            ));
+        }
+    };
 
     match state
         .log_service
-        .get_logs_by_schema_name_and_id(
-            &schema_name,
-            &schema_version,
-            query_params.clone(),
-        )
+        .get_paginated_logs(schema.id, query_params)
         .await
     {
-        Ok(logs) => {
-            let total = state
-                .log_service
-                .count_logs_by_schema_name_and_id_with_dates(
-                    &schema_name,
-                    &schema_version,
-                    query_params.filters.clone(),
-                    query_params.date_begin,
-                    query_params.date_end,
-                )
-                .await
-                .unwrap_or(0);
-
-            let log_responses: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
-
-            let total_pages = if query_params.limit > 0 {
-                ((total as f64) / (query_params.limit as f64)).ceil() as i32
-            } else {
-                0
-            };
-
-            Ok(Json(PaginatedLogsResponse {
-                logs: log_responses,
-                timewindow: if query_params.date_begin.is_some() || query_params.date_end.is_some() {
-                    Some(TimeWindowMetadata {
-                        date_begin: query_params.date_begin,
-                        date_end: query_params.date_end,
-                    })
-                } else {
-                    None
-                },
-                pagination: PaginationMetadata {
-                    page: query_params.page,
-                    limit: query_params.limit,
-                    total,
-                    total_pages,
-                },
-            }))
-        }
+        Ok(response) => Ok(Json(response)),
         Err(e) => {
             let status_code = if e.to_string().contains("not found") {
                 StatusCode::NOT_FOUND
@@ -99,77 +90,80 @@ pub async fn get_logs(
 
             Err((
                 status_code,
-                Json(ErrorResponse::new("NOT_FOUND", e.to_string())),
+                Json(ErrorResponse::new("FETCH_FAILED", e.to_string())),
             ))
         }
     }
 }
 
-pub async fn query_logs(
+pub async fn query_logs_by_name(
+    State(state): State<AppState>,
+    Path(schema_name): Path<String>,
+    Json(payload): Json<QueryLogsRequest>,
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    query_logs_internal(state, schema_name, None, payload).await
+}
+
+pub async fn query_logs_by_name_and_version(
     State(state): State<AppState>,
     Path((schema_name, schema_version)): Path<(String, String)>,
     Json(payload): Json<QueryLogsRequest>,
 ) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
-    if schema_name.trim().is_empty() || schema_version.trim().is_empty() {
+    query_logs_internal(state, schema_name, Some(schema_version), payload).await
+}
+
+async fn query_logs_internal(
+    state: AppState,
+    schema_name: String,
+    schema_version: Option<String>,
+    payload: QueryLogsRequest,
+) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    if schema_name.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse::new(
                 "INVALID_INPUT",
-                "Schema name or version cannot be empty",
+                "Schema name cannot be empty",
             )),
         ));
     }
 
+    if let Some(ref version) = schema_version {
+        if version.trim().is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "INVALID_INPUT",
+                    "Schema version cannot be empty",
+                )),
+            ));
+        }
+    }
+
     let query_params: QueryParams = payload.into();
+    let schema_ref = SchemaNameVersion::new(schema_name.clone(), schema_version.clone());
+
+    let schema = match state.schema_service.resolve_schema(&schema_ref).await {
+        Ok(schema) => schema,
+        Err(e) => {
+            let status_code = if e.to_string().contains("not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            return Err((
+                status_code,
+                Json(ErrorResponse::new("SCHEMA_NOT_FOUND", e.to_string())),
+            ));
+        }
+    };
 
     match state
         .log_service
-        .get_logs_by_schema_name_and_id(
-            &schema_name,
-            &schema_version,
-            query_params.clone(),
-        )
+        .get_paginated_logs(schema.id, query_params)
         .await
     {
-        Ok(logs) => {
-            let total = state
-                .log_service
-                .count_logs_by_schema_name_and_id_with_dates(
-                    &schema_name,
-                    &schema_version,
-                    query_params.filters.clone(),
-                    query_params.date_begin,
-                    query_params.date_end,
-                )
-                .await
-                .unwrap_or(0);
-
-            let log_responses: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
-
-            let total_pages = if query_params.limit > 0 {
-                ((total as f64) / (query_params.limit as f64)).ceil() as i32
-            } else {
-                0
-            };
-
-            Ok(Json(PaginatedLogsResponse {
-                logs: log_responses,
-                timewindow: if query_params.date_begin.is_some() || query_params.date_end.is_some() {
-                    Some(TimeWindowMetadata {
-                        date_begin: query_params.date_begin,
-                        date_end: query_params.date_end,
-                    })
-                } else {
-                    None
-                },
-                pagination: PaginationMetadata {
-                    page: query_params.page,
-                    limit: query_params.limit,
-                    total,
-                    total_pages,
-                },
-            }))
-        }
+        Ok(response) => Ok(Json(response)),
         Err(e) => {
             let status_code = if e.to_string().contains("not found") {
                 StatusCode::NOT_FOUND
@@ -179,7 +173,7 @@ pub async fn query_logs(
 
             Err((
                 status_code,
-                Json(ErrorResponse::new("NOT_FOUND", e.to_string())),
+                Json(ErrorResponse::new("FETCH_FAILED", e.to_string())),
             ))
         }
     }
