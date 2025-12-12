@@ -1,11 +1,17 @@
 use axum::{
-    Extension, Json, extract::{Path, Query, State}, http::StatusCode
+    extract::{Path, Query, State},
+    http::StatusCode,
+    Extension, Json,
 };
 
 use crate::{
-    AppState, dto::{
-        CreateLogRequest, ErrorResponse, LogEvent, LogResponse, PaginatedLogsResponse, QueryLogsRequest, log_dto::QueryParams
-    }, middleware::RequestId, services::schema_service::SchemaNameVersion
+    dto::{
+        log_dto::QueryParams, CreateLogRequest, ErrorResponse, LogEvent, LogResponse,
+        PaginatedLogsResponse, QueryLogsRequest,
+    },
+    middleware::RequestId,
+    services::schema_service::SchemaNameVersion,
+    AppState,
 };
 
 pub async fn get_logs_by_name(
@@ -70,7 +76,11 @@ async fn get_logs_internal(
             };
             return Err((
                 status_code,
-                Json(ErrorResponse::with_request_id("SCHEMA_NOT_FOUND", e.to_string(), &request_id)),
+                Json(ErrorResponse::with_request_id(
+                    "SCHEMA_NOT_FOUND",
+                    e.to_string(),
+                    &request_id,
+                )),
             ));
         }
     };
@@ -90,7 +100,11 @@ async fn get_logs_internal(
 
             Err((
                 status_code,
-                Json(ErrorResponse::with_request_id("FETCH_FAILED", e.to_string(), &request_id)),
+                Json(ErrorResponse::with_request_id(
+                    "FETCH_FAILED",
+                    e.to_string(),
+                    &request_id,
+                )),
             ))
         }
     }
@@ -111,7 +125,14 @@ pub async fn query_logs_by_name_and_version(
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<QueryLogsRequest>,
 ) -> Result<Json<PaginatedLogsResponse>, (StatusCode, Json<ErrorResponse>)> {
-    query_logs_internal(state, schema_name, Some(schema_version), payload, request_id).await
+    query_logs_internal(
+        state,
+        schema_name,
+        Some(schema_version),
+        payload,
+        request_id,
+    )
+    .await
 }
 
 async fn query_logs_internal(
@@ -158,7 +179,11 @@ async fn query_logs_internal(
             };
             return Err((
                 status_code,
-                Json(ErrorResponse::with_request_id("SCHEMA_NOT_FOUND", e.to_string(), &request_id)),
+                Json(ErrorResponse::with_request_id(
+                    "SCHEMA_NOT_FOUND",
+                    e.to_string(),
+                    &request_id,
+                )),
             ));
         }
     };
@@ -178,7 +203,11 @@ async fn query_logs_internal(
 
             Err((
                 status_code,
-                Json(ErrorResponse::with_request_id("FETCH_FAILED", e.to_string(), &request_id)),
+                Json(ErrorResponse::with_request_id(
+                    "FETCH_FAILED",
+                    e.to_string(),
+                    &request_id,
+                )),
             ))
         }
     }
@@ -201,7 +230,11 @@ pub async fn get_log_by_id(
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse::with_request_id("FETCH_FAILED", e.to_string(), &request_id)),
+            Json(ErrorResponse::with_request_id(
+                "FETCH_FAILED",
+                e.to_string(),
+                &request_id,
+            )),
         )),
     }
 }
@@ -255,7 +288,14 @@ pub async fn create_log(
                 (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR")
             };
 
-            Err((status_code, Json(ErrorResponse::with_request_id(error, e.to_string(), &request_id))))
+            Err((
+                status_code,
+                Json(ErrorResponse::with_request_id(
+                    error,
+                    e.to_string(),
+                    &request_id,
+                )),
+            ))
         }
     }
 }
@@ -283,7 +323,11 @@ pub async fn delete_log(
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse::with_request_id("DELETION_FAILED", e.to_string(), &request_id)),
+            Json(ErrorResponse::with_request_id(
+                "DELETION_FAILED",
+                e.to_string(),
+                &request_id,
+            )),
         )),
     }
 }
