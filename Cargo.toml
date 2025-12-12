@@ -12,7 +12,7 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tower = "0.5.2"
 tower-http = { version = "0.6.6", features = ["trace", "cors"] }
-sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "chrono", "uuid"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "chrono", "uuid", "migrate"] }
 anyhow = "1.0"
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
@@ -26,3 +26,6 @@ futures-util = "0.3"
 reqwest = { version = "0.11", features = ["json"] }
 futures = "0.3"
 tokio-tungstenite = "0.21"
+tokio-postgres = "0.7"
+testcontainers = "0.26"
+testcontainers-modules = { version = "0.13", features = ["postgres", "blocking"] }
