@@ -14,6 +14,7 @@ use tokio::{net::TcpListener, sync::broadcast};
 pub struct TestApp {
     pub address: String,
     pub client: Client,
+    #[allow(unused)]
     pub db_pool: Pool<Postgres>,
     _container: ContainerAsync<postgres::Postgres>,
 }
