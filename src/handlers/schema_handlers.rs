@@ -1,14 +1,20 @@
 use axum::{
-    Extension, Json, extract::{Path, Query, State}, http::{HeaderMap, StatusCode, header}, response::IntoResponse
+    extract::{Path, Query, State},
+    http::{header, HeaderMap, StatusCode},
+    response::IntoResponse,
+    Extension, Json,
 };
 use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::{
-    AppState, dto::{
+    dto::{
         CreateSchemaRequest, DeleteSchemaQuery, ErrorResponse, GetSchemasQuery, SchemaResponse,
         UpdateSchemaRequest,
-    }, middleware::RequestId, repositories::schema_repository::SchemaQueryParams
+    },
+    middleware::RequestId,
+    repositories::schema_repository::SchemaQueryParams,
+    AppState,
 };
 
 /// ## GET /schemas
@@ -48,7 +54,11 @@ pub async fn get_schemas(
         }
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse::with_request_id("INTERNAL_ERROR", e.to_string(), &request_id)),
+            Json(ErrorResponse::with_request_id(
+                "INTERNAL_ERROR",
+                e.to_string(),
+                &request_id,
+            )),
         )),
     }
 }
@@ -90,7 +100,11 @@ pub async fn get_schema_by_name_and_version(
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse::with_request_id("INTERNAL_ERROR", e.to_string(), &request_id)),
+            Json(ErrorResponse::with_request_id(
+                "INTERNAL_ERROR",
+                e.to_string(),
+                &request_id,
+            )),
         )),
     }
 }
@@ -125,7 +139,11 @@ pub async fn get_schema_by_id(
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse::with_request_id("INTERNAL_ERROR", e.to_string(), &request_id)),
+            Json(ErrorResponse::with_request_id(
+                "INTERNAL_ERROR",
+                e.to_string(),
+                &request_id,
+            )),
         )),
     }
 }
@@ -195,7 +213,14 @@ pub async fn create_schema(
                 (StatusCode::BAD_REQUEST, "CREATION_FAILED")
             };
 
-            Err((status_code, Json(ErrorResponse::with_request_id(error_code, error_msg, &request_id))))
+            Err((
+                status_code,
+                Json(ErrorResponse::with_request_id(
+                    error_code,
+                    error_msg,
+                    &request_id,
+                )),
+            ))
         }
     }
 }
@@ -214,7 +239,7 @@ pub async fn update_schema(
             Json(ErrorResponse::with_request_id(
                 "INVALID_INPUT",
                 "Schema ID cannot be empty",
-                &request_id
+                &request_id,
             )),
         ));
     }
@@ -262,7 +287,14 @@ pub async fn update_schema(
                 (StatusCode::BAD_REQUEST, "UPDATE_FAILED")
             };
 
-            Err((status_code, Json(ErrorResponse::with_request_id(error_code, error_msg, &request_id))))
+            Err((
+                status_code,
+                Json(ErrorResponse::with_request_id(
+                    error_code,
+                    error_msg,
+                    &request_id,
+                )),
+            ))
         }
     }
 }
@@ -305,12 +337,20 @@ pub async fn delete_schema(
             {
                 Err((
                     StatusCode::CONFLICT,
-                    Json(ErrorResponse::with_request_id("SCHEMA_HAS_LOGS", error_msg, &request_id)),
+                    Json(ErrorResponse::with_request_id(
+                        "SCHEMA_HAS_LOGS",
+                        error_msg,
+                        &request_id,
+                    )),
                 ))
             } else {
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse::with_request_id("DELETION_FAILED", error_msg, &request_id)),
+                    Json(ErrorResponse::with_request_id(
+                        "DELETION_FAILED",
+                        error_msg,
+                        &request_id,
+                    )),
                 ))
             }
         }
