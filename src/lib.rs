@@ -32,6 +32,8 @@ pub use models::{Log, Schema};
 pub use repositories::{LogRepository, SchemaRepository};
 pub use services::{LogService, SchemaService};
 
+use crate::middleware::api_key_middleware;
+
 #[derive(Clone)]
 pub struct AppState {
     pub schema_service: Arc<SchemaService>,
@@ -63,19 +65,23 @@ async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
 }
 
 pub fn create_app(app_state: AppState) -> Router {
-    Router::new()
+
+    let public_routes = Router::new()
         .route("/", get(health_check))
-        .route("/health", get(health_check))
-        .route("/ws/logs", get(ws_handler))
+        .route("/health", get(health_check));
+
+    let schema_routes = Router::new()
         .route("/schemas", get(get_schemas))
         .route("/schemas", post(create_schema))
         .route("/schemas/{id}", get(get_schema_by_id))
         .route("/schemas/{id}", put(update_schema))
         .route("/schemas/{id}", delete(delete_schema))
         .route(
-            "/schemas/{schema_name}/versions/{schema_version}",
-            get(get_schema_by_name_and_version),
-        )
+            "/schemas/{schema_name}/version/{schema_version}",
+            get(get_schema_by_name_and_version)
+        );
+
+    let log_routes = Router::new()
         .route("/logs", post(create_log))
         .route("/logs/schema/{schema_name}", get(get_logs_by_name))
         .route("/logs/schema/{schema_name}/query", post(query_logs_by_name))
@@ -88,7 +94,20 @@ pub fn create_app(app_state: AppState) -> Router {
             post(query_logs_by_name_and_version),
         )
         .route("/logs/{id}", get(get_log_by_id))
-        .route("/logs/{id}", delete(delete_log))
+        .route("/logs/{id}", delete(delete_log));
+
+    let ws_routes = Router::new()
+        .route("/ws/logs", get(ws_handler));
+
+    let protected_routes = Router::new()
+        .merge(schema_routes)
+        .merge(log_routes)
+        .merge(ws_routes)
+        .layer(axum_middleware::from_fn(api_key_middleware));
+
+    Router::new()
+        .merge(public_routes)
+        .merge(protected_routes)
         .with_state(app_state)
         .layer(
             ServiceBuilder::new()

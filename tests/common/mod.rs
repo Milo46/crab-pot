@@ -1,5 +1,2 @@
-pub mod context;
+pub mod test_app;
 pub mod fixtures;
-
-pub use context::TestContext;
-pub use fixtures::*;
