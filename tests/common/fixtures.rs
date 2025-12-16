@@ -1,8 +1,5 @@
 use serde_json::json;
 
-pub const TEST_SCHEMA_NAME: &str = "test-schema";
-pub const TEST_SCHEMA_VERSION: &str = "1.0.0";
-
 pub fn valid_schema_payload(name: &str) -> serde_json::Value {
     json!({
         "name": name,
@@ -10,18 +7,29 @@ pub fn valid_schema_payload(name: &str) -> serde_json::Value {
         "schema_definition": {
             "type": "object",
             "properties": {
-                "message": { "type": "string" }
+                "message": {
+                    "type": "string"
+                }
             },
             "required": [ "message" ]
         }
     })
 }
 
-pub fn valid_log_payload(schema_id: uuid::Uuid) -> serde_json::Value {
+pub fn valid_log_payload(schema_id: &str) -> serde_json::Value {
     json!({
         "schema_id": schema_id,
         "log_data": {
             "message": "Test log message"
+        }
+    })
+}
+
+pub fn valid_log_payload_with_message(schema_id: &str, message: &str) -> serde_json::Value {
+    json!({
+        "schema_id": schema_id,
+        "log_data": {
+            "message": message,
         }
     })
 }

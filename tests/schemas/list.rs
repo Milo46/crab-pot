@@ -1,41 +1,22 @@
 use reqwest::StatusCode;
 
-use crate::common::{valid_schema_payload, TestContext};
+use crate::common::{
+    routes::schemas::{create_valid_schema, get_schemas},
+    test_app::setup_test_app,
+};
 
 #[tokio::test]
 async fn lists_all_schemas() {
-    let ctx = TestContext::new().await;
+    let app = setup_test_app().await;
 
-    let initial_response = ctx
-        .client
-        .get(&format!("{}/schemas", ctx.base_url))
-        .send()
-        .await
-        .unwrap();
+    let initial_response = get_schemas(&app).await;
     let initial_data: serde_json::Value = initial_response.json().await.unwrap();
     let initial_count = initial_data["schemas"].as_array().unwrap().len();
 
-    ctx.client
-        .post(&format!("{}/schemas", ctx.base_url))
-        .json(&valid_schema_payload("list-test-1"))
-        .send()
-        .await
-        .unwrap();
+    let _ = create_valid_schema(&app, "list-test-1").await;
+    let _ = create_valid_schema(&app, "list-test-2").await;
 
-    ctx.client
-        .post(&format!("{}/schemas", ctx.base_url))
-        .json(&valid_schema_payload("list-test-2"))
-        .send()
-        .await
-        .unwrap();
-
-    let response = ctx
-        .client
-        .get(&format!("{}/schemas", ctx.base_url))
-        .send()
-        .await
-        .unwrap();
-
+    let response = get_schemas(&app).await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let data: serde_json::Value = response.json().await.unwrap();
@@ -43,13 +24,13 @@ async fn lists_all_schemas() {
     assert_eq!(
         schemas.len(),
         initial_count + 2,
-        "Expected {} schemas (initial {} + 2 new), but got {}",
+        "Expected {} schemas (initial {} = 2 new), but got {}",
         initial_count + 2,
         initial_count,
         schemas.len()
     );
 
-    let schema_names: Vec<&str> = schemas.iter().filter_map(|s| s["name"].as_str()).collect();
-    assert!(schema_names.contains(&"list-test-1"));
-    assert!(schema_names.contains(&"list-test-2"));
+    let schemas_names: Vec<&str> = schemas.iter().filter_map(|s| s["name"].as_str()).collect();
+    assert!(schemas_names.contains(&"list-test-1"));
+    assert!(schemas_names.contains(&"list-test-2"));
 }
