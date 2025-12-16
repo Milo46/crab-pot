@@ -48,6 +48,7 @@ impl LogService {
                 if error_string.contains("foreign key constraint")
                     || error_string.contains("violates foreign key")
                     || error_string.contains("fk_logs_schema_id")
+                    || error_string.contains("resource does not exist")
                 {
                     Err(crate::error::AppError::NotFound(format!(
                         "Schema with id '{}' not found",
