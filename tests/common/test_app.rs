@@ -1,22 +1,62 @@
 use log_server::{
     create_app, AppState, LogRepository, LogService, SchemaRepository, SchemaService,
 };
-use reqwest::Client;
+use reqwest::{Client, Method, RequestBuilder};
 use sqlx::{Pool, Postgres};
-use tokio_postgres::NoTls;
 use std::sync::Arc;
 use testcontainers_modules::{
     postgres,
     testcontainers::{runners::AsyncRunner, ContainerAsync},
 };
 use tokio::{net::TcpListener, sync::broadcast};
+use tokio_postgres::NoTls;
 
 pub struct TestApp {
     pub address: String,
     pub client: Client,
     #[allow(unused)]
     pub db_pool: Pool<Postgres>,
+    api_key: String,
     _container: ContainerAsync<postgres::Postgres>,
+}
+
+impl TestApp {
+    pub fn auth(&self) -> AuthClient<'_> {
+        AuthClient { app: self }
+    }
+}
+
+pub struct AuthClient<'a> {
+    app: &'a TestApp,
+}
+
+impl<'a> AuthClient<'a> {
+    fn url(&self, path: impl AsRef<str>) -> String {
+        format!("{}{}", self.app.address, path.as_ref())
+    }
+
+    pub fn request(&self, method: Method, path: impl AsRef<str>) -> RequestBuilder {
+        self.app
+            .client
+            .request(method, self.url(path))
+            .header("X-Api-Key", &self.app.api_key)
+    }
+
+    pub fn get(&self, path: impl AsRef<str>) -> reqwest::RequestBuilder {
+        self.request(Method::GET, path)
+    }
+
+    pub fn post(&self, path: impl AsRef<str>) -> reqwest::RequestBuilder {
+        self.request(Method::POST, path)
+    }
+
+    pub fn put(&self, path: impl AsRef<str>) -> reqwest::RequestBuilder {
+        self.request(Method::PUT, path)
+    }
+
+    pub fn delete(&self, path: impl AsRef<str>) -> reqwest::RequestBuilder {
+        self.request(Method::DELETE, path)
+    }
 }
 
 pub async fn setup_test_app() -> TestApp {
@@ -36,10 +76,11 @@ pub async fn setup_test_app() -> TestApp {
         }
     });
 
-    let init_sql = std::fs::read_to_string("./docker/db/init.sql")
-        .expect("Failed to read init.sql");
+    let init_sql =
+        std::fs::read_to_string("./docker/db/init.sql").expect("Failed to read init.sql");
 
-    client.batch_execute(&init_sql)
+    client
+        .batch_execute(&init_sql)
         .await
         .expect("Failed to run init.sql");
 
@@ -82,6 +123,7 @@ pub async fn setup_test_app() -> TestApp {
         address: address_str,
         client,
         db_pool: pool,
+        api_key: "secret-key".to_string(),
         _container: container,
     }
 }

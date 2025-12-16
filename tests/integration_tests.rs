@@ -1,6 +1,6 @@
 mod common;
-mod schemas;
 mod logs;
+mod schemas;
 
 mod health {
     use crate::common::test_app::setup_test_app;
@@ -17,11 +17,10 @@ mod health {
             .send()
             .await
             .unwrap();
-
+        
         assert_eq!(response.status(), StatusCode::OK);
 
         let body: serde_json::Value = response.json().await.expect("Failed to parse JSON");
-
         assert_eq!(body["status"], "healthy");
         assert_eq!(body["service"], "log-server");
         assert!(body["timestamp"].is_string());
