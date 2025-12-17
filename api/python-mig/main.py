@@ -1,5 +1,6 @@
 import typer
 import httpx
+import uuid
 from pathlib import Path
 from rich.console import Console
 from rich.table import Table
@@ -52,7 +53,7 @@ def list_schemas(
 
 
 @schemas_app.command("get")
-def get_schema(schema_id: int):
+def get_schema(schema_id: uuid.UUID):
     response = client.get(f"/schemas/{schema_id}")
     response.raise_for_status()
     console.print_json(data=response.json())
