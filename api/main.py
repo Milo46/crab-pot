@@ -1,6 +1,7 @@
 import typer
 import httpx
 import uuid
+import os
 from rich.console import Console
 from rich.table import Table
 from datetime import datetime
@@ -8,10 +9,15 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+API_KEY = os.getenv("LOG_SERVER_API_KEY", "secret-key")
+
 app = typer.Typer()
 console = Console()
 
-client = httpx.Client(base_url="http://localhost:8081")
+client = httpx.Client(
+    base_url="http://localhost:8081",
+    headers={"X-Api-Key": API_KEY},
+)
 
 schemas_app = typer.Typer()
 app.add_typer(schemas_app, name="schemas")
@@ -227,7 +233,7 @@ def list_logs(
         False, "--expand", "-e", help="Show full log data (pretty-printed)"
     ),
     limit: int = typer.Option(
-        100, "--limit", "-l", help="Maximum number of logs to retrieve"
+        10, "--limit", "-l", help="Maximum number of logs to retrieve"
     ),
 ):
     if not schema_name:
@@ -235,7 +241,9 @@ def list_logs(
         raise typer.Exit(1)
 
     try:
-        response = client.get(f"/logs/schema/{schema_name}")
+        params = {"limit": limit}
+
+        response = client.get(f"/logs/schema/{schema_name}", params=params)
         response.raise_for_status()
         data = response.json()
 
