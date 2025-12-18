@@ -77,7 +77,7 @@ pub fn create_app(app_state: AppState) -> Router {
         .route("/schemas/{id}", delete(delete_schema))
         .route(
             "/schemas/{schema_name}/version/{schema_version}",
-            get(get_schema_by_name_and_version),
+            get(get_schema_by_name_and_version)
         );
 
     let log_routes = Router::new()
@@ -95,7 +95,8 @@ pub fn create_app(app_state: AppState) -> Router {
         .route("/logs/{id}", get(get_log_by_id))
         .route("/logs/{id}", delete(delete_log));
 
-    let ws_routes = Router::new().route("/ws/logs", get(ws_handler));
+    let ws_routes = Router::new()
+        .route("/ws/logs", get(ws_handler));
 
     let protected_routes = Router::new()
         .merge(schema_routes)
