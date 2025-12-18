@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass123}
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ./docker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/db:/docker-entrypoint-initdb.d:ro
     ports:
       - "5433:5432"
     networks:

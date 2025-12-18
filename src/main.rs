@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
         log_broadcast: log_broadcast_tx,
     };
 
-    let app = create_app(app_state);
+    let app = create_app(app_state, pool);
 
     tracing::info!("📊 Available endpoints:");
     tracing::info!("   GET    /                     - Health check");
@@ -63,7 +63,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("🚀 Log Server running at http://{}", addr);
 
     let listener = TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }
