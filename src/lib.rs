@@ -65,6 +65,7 @@ async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
 }
 
 pub fn create_app(app_state: AppState) -> Router {
+
     let public_routes = Router::new()
         .route("/", get(health_check))
         .route("/health", get(health_check));
