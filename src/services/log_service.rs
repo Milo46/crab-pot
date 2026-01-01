@@ -4,6 +4,7 @@ use crate::dto::log_dto::{
 use crate::error::AppResult;
 use crate::models::Log;
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
+use crate::AppError;
 use chrono::Utc;
 use serde_json::Value;
 use std::sync::Arc;
@@ -27,10 +28,15 @@ impl LogService {
         self.log_repository
             .get_by_schema_id(schema_id, query_params)
             .await
+            .map_err(|e| e.context(format!("Failed to get logs for schema {}", schema_id)))
     }
 
-    pub async fn get_log_by_id(&self, id: i32) -> AppResult<Option<Log>> {
-        self.log_repository.get_by_id(id).await
+    pub async fn get_log_by_id(&self, id: i32) -> AppResult<Log> {
+        self.log_repository
+            .get_by_id(id)
+            .await
+            .map_err(|e| e.context(format!("Failed to fetch log {}", id)))?
+            .ok_or_else(|| AppError::not_found(format!("Log with id {} not found", id)))
     }
 
     pub async fn create_log(&self, schema_id: Uuid, log_data: Value) -> AppResult<Log> {
@@ -41,27 +47,17 @@ impl LogService {
             created_at: Utc::now(),
         };
 
-        match self.log_repository.create(&log).await {
-            Ok(log) => Ok(log),
-            Err(e) => {
-                let error_string = e.to_string();
-                if error_string.contains("foreign key constraint")
-                    || error_string.contains("violates foreign key")
-                    || error_string.contains("fk_logs_schema_id")
-                {
-                    Err(crate::error::AppError::NotFound(format!(
-                        "Schema with id '{}' not found",
-                        schema_id
-                    )))
-                } else {
-                    Err(e)
-                }
-            }
-        }
+        self.log_repository
+            .create(&log)
+            .await
+            .map_err(|e| e.context(format!("Failed to create log for schema {}", schema_id)))
     }
 
     pub async fn delete_log(&self, id: i32) -> AppResult<bool> {
-        self.log_repository.delete(id).await
+        self.log_repository
+            .delete(id)
+            .await
+            .map_err(|e| e.context(format!("Failed to delete log {}", id)))
     }
 
     pub async fn count_logs_by_schema_id(
@@ -77,6 +73,7 @@ impl LogService {
                 query_params.date_end,
             )
             .await
+            .map_err(|e| e.context(format!("Failed to count logs for schema {}", schema_id)))
     }
 
     pub async fn get_paginated_logs(
@@ -87,7 +84,13 @@ impl LogService {
         let logs = self
             .log_repository
             .get_by_schema_id(schema_id, query_params.clone())
-            .await?;
+            .await
+            .map_err(|e| {
+                e.context(format!(
+                    "Failed to get paginated logs for schema {}",
+                    schema_id
+                ))
+            })?;
 
         let total = self
             .log_repository
@@ -97,7 +100,8 @@ impl LogService {
                 query_params.date_begin,
                 query_params.date_end,
             )
-            .await?;
+            .await
+            .map_err(|e| e.context(format!("Failed to count logs for schema {}", schema_id)))?;
 
         let log_responses: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
 

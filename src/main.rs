@@ -1,3 +1,5 @@
+use log_server::repositories::ApiKeyRepository;
+use log_server::services::api_key_service::ApiKeyService;
 use log_server::{
     create_app, AppState, LogRepository, LogService, SchemaRepository, SchemaService,
 };
@@ -28,18 +30,21 @@ async fn main() -> anyhow::Result<()> {
 
     let schema_repository = Arc::new(SchemaRepository::new(pool.clone()));
     let log_repository = Arc::new(LogRepository::new(pool.clone()));
+    let api_key_repository = Arc::new(ApiKeyRepository::new(pool.clone()));
 
     let schema_service = Arc::new(SchemaService::new(
         schema_repository.clone(),
         log_repository.clone(),
     ));
     let log_service = Arc::new(LogService::new(log_repository.clone()));
+    let api_key_service = Arc::new(ApiKeyService::new(api_key_repository.clone()));
 
     let (log_broadcast_tx, _) = broadcast::channel(100);
 
     let app_state = AppState {
         schema_service,
         log_service,
+        api_key_service,
         log_broadcast: log_broadcast_tx,
     };
 

@@ -33,12 +33,21 @@ pub use models::{Log, Schema};
 pub use repositories::{LogRepository, SchemaRepository};
 pub use services::{LogService, SchemaService};
 
-use crate::middleware::{api_key::api_key_middleware_debug, api_key_middleware};
+use crate::{
+    // handlers::{create_api_key, delete_api_key, get_api_key_by_id, get_api_keys},
+    handlers::{
+        api_key_handlers::{delete_api_key, get_api_key_by_id, get_api_keys, rotate_api_key},
+        create_api_key,
+    },
+    middleware::api_key_middleware,
+    services::api_key_service::ApiKeyService,
+};
 
 #[derive(Clone)]
 pub struct AppState {
     pub schema_service: Arc<SchemaService>,
     pub log_service: Arc<LogService>,
+    pub api_key_service: Arc<ApiKeyService>,
     pub log_broadcast: broadcast::Sender<LogEvent>,
 }
 
@@ -46,11 +55,13 @@ impl AppState {
     pub fn new(
         schema_service: Arc<SchemaService>,
         log_service: Arc<LogService>,
+        api_key_service: Arc<ApiKeyService>,
         log_broadcast: broadcast::Sender<LogEvent>,
     ) -> Self {
         Self {
             schema_service,
             log_service,
+            api_key_service,
             log_broadcast,
         }
     }
@@ -65,10 +76,18 @@ async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
     })))
 }
 
-pub fn create_app(app_state: AppState, pool: PgPool) -> Router {
+pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
+    let api_keys_routes = Router::new()
+        .route("/api-keys", post(create_api_key))
+        .route("/api-keys", get(get_api_keys))
+        .route("/api-keys/{key_id}", get(get_api_key_by_id))
+        .route("/api-keys/{key_id}", delete(delete_api_key))
+        .route("/api-keys/{key_id}/rotate", post(rotate_api_key));
+
     let public_routes = Router::new()
         .route("/", get(health_check))
-        .route("/health", get(health_check));
+        .route("/health", get(health_check))
+        .merge(api_keys_routes);
 
     let schema_routes = Router::new()
         .route("/schemas", get(get_schemas))
@@ -103,7 +122,7 @@ pub fn create_app(app_state: AppState, pool: PgPool) -> Router {
         .merge(log_routes)
         .merge(ws_routes)
         .layer(axum_middleware::from_fn_with_state(
-            pool,
+            app_state.clone(),
             api_key_middleware,
         ));
 

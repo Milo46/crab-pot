@@ -1,9 +1,6 @@
-use base64::{engine::general_purpose, Engine as _};
-use rand::{rng, RngCore};
-use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 
-use crate::models::ApiKey;
+use crate::{models::ApiKey, AppResult};
 
 pub struct ApiKeyRepository {
     pool: PgPool,
@@ -14,24 +11,24 @@ impl ApiKeyRepository {
         Self { pool }
     }
 
-    pub fn hash_key(key: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(key.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
-    pub fn generate_key() -> String {
-        let mut random_bytes = [0u8; 32];
-        rng().fill_bytes(&mut random_bytes);
-
-        format!(
-            "sk_{}",
-            general_purpose::URL_SAFE_NO_PAD.encode(random_bytes)
+    pub async fn find_by_id(&self, id: i32) -> AppResult<Option<ApiKey>> {
+        let result = sqlx::query_as::<_, ApiKey>(
+            r#"
+            SELECT id, key_hash, key_prefix, name, description, created_at,
+                   last_used_at, expires_at, is_active, usage_count, allowed_ips
+            FROM api_keys
+            WHERE id = $1
+            "#,
         )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(result)
     }
 
-    pub async fn find_by_hash(&self, key_hash: &str) -> Result<Option<ApiKey>, sqlx::Error> {
-        sqlx::query_as::<_, ApiKey>(
+    pub async fn find_by_hash(&self, key_hash: &str) -> AppResult<Option<ApiKey>> {
+        let result = sqlx::query_as::<_, ApiKey>(
             r#"
             SELECT id, key_hash, key_prefix, name, description, created_at,
                    last_used_at, expires_at, is_active, usage_count, allowed_ips
@@ -41,11 +38,13 @@ impl ApiKeyRepository {
         )
         .bind(key_hash)
         .fetch_optional(&self.pool)
-        .await
+        .await?;
+
+        Ok(result)
     }
 
-    pub async fn find_valid_by_hash(&self, key_hash: &str) -> Result<Option<ApiKey>, sqlx::Error> {
-        sqlx::query_as::<_, ApiKey>(
+    pub async fn find_valid_by_hash(&self, key_hash: &str) -> AppResult<Option<ApiKey>> {
+        let result = sqlx::query_as::<_, ApiKey>(
             r#"
             SELECT id, key_hash, key_prefix, name, description, created_at, 
                    last_used_at, expires_at, is_active, usage_count, allowed_ips
@@ -57,21 +56,21 @@ impl ApiKeyRepository {
         )
         .bind(key_hash)
         .fetch_optional(&self.pool)
-        .await
+        .await?;
+
+        Ok(result)
     }
 
     pub async fn create(
         &self,
-        plain_key: &str,
+        key_hash: &str,
+        key_prefix: Option<String>,
         name: &str,
         description: Option<&str>,
         expires_at: Option<chrono::DateTime<chrono::Utc>>,
         allowed_ips: Option<Vec<std::net::IpAddr>>,
-    ) -> Result<ApiKey, sqlx::Error> {
-        let key_hash = Self::hash_key(plain_key);
-        let key_prefix = Some(format!("{}...", &plain_key[..10]));
-
-        sqlx::query_as::<_, ApiKey>(
+    ) -> AppResult<ApiKey> {
+        let api_key = sqlx::query_as::<_, ApiKey>(
             r#"
             INSERT INTO api_keys (key_hash, key_prefix, name, description, expires_at, allowed_ips)
             VALUES ($1, $2, $3, $4, $5, $6)
@@ -86,11 +85,13 @@ impl ApiKeyRepository {
         .bind(expires_at)
         .bind(allowed_ips)
         .fetch_one(&self.pool)
-        .await
+        .await?;
+
+        Ok(api_key)
     }
 
-    pub async fn update_usage(&self, key_hash: &str) -> Result<(), sqlx::Error> {
-        sqlx::query(
+    pub async fn update_usage(&self, key_hash: &str) -> AppResult<()> {
+        let _ = sqlx::query(
             r#"
             UPDATE api_keys 
             SET last_used_at = NOW(), 
@@ -105,8 +106,8 @@ impl ApiKeyRepository {
         Ok(())
     }
 
-    pub async fn revoke(&self, key_id: i32) -> Result<(), sqlx::Error> {
-        sqlx::query("UPDATE api_keys SET is_active = false WHERE id = $1")
+    pub async fn revoke(&self, key_id: i32) -> AppResult<()> {
+        let _ = sqlx::query("UPDATE api_keys SET is_active = false WHERE id = $1")
             .bind(key_id)
             .execute(&self.pool)
             .await?;
@@ -114,8 +115,33 @@ impl ApiKeyRepository {
         Ok(())
     }
 
-    pub async fn list(&self) -> Result<Vec<ApiKey>, sqlx::Error> {
-        sqlx::query_as::<_, ApiKey>(
+    pub async fn rotate(
+        &self,
+        key_id: i32,
+        new_key_hash: &str,
+        new_key_prefix: Option<String>,
+    ) -> AppResult<ApiKey> {
+        let rotated_key = sqlx::query_as::<_, ApiKey>(
+            r#"
+            UPDATE api_keys 
+            SET key_hash = $2, 
+                key_prefix = $3
+            WHERE id = $1
+            RETURNING id, key_hash, key_prefix, name, description, created_at, 
+                      last_used_at, expires_at, is_active, usage_count, allowed_ips
+            "#,
+        )
+        .bind(key_id)
+        .bind(new_key_hash)
+        .bind(new_key_prefix)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(rotated_key)
+    }
+
+    pub async fn list(&self) -> AppResult<Vec<ApiKey>> {
+        let api_keys = sqlx::query_as::<_, ApiKey>(
             r#"
             SELECT id, key_hash, key_prefix, name, description, created_at, 
                    last_used_at, expires_at, is_active, usage_count, allowed_ips
@@ -124,11 +150,13 @@ impl ApiKeyRepository {
             "#,
         )
         .fetch_all(&self.pool)
-        .await
+        .await?;
+
+        Ok(api_keys)
     }
 
-    pub async fn find_expired_active(&self) -> Result<Vec<ApiKey>, sqlx::Error> {
-        sqlx::query_as::<_, ApiKey>(
+    pub async fn find_expired_active(&self) -> AppResult<Vec<ApiKey>> {
+        let expired_active_api_keys = sqlx::query_as::<_, ApiKey>(
             r#"
             SELECT id, key_hash, key_prefix, name, description, created_at, 
                    last_used_at, expires_at, is_active, usage_count, allowed_ips
@@ -139,6 +167,17 @@ impl ApiKeyRepository {
             "#,
         )
         .fetch_all(&self.pool)
-        .await
+        .await?;
+
+        Ok(expired_active_api_keys)
+    }
+
+    pub async fn delete(&self, id: i32) -> AppResult<bool> {
+        let result = sqlx::query("DELETE FROM api_keys WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected() > 0)
     }
 }

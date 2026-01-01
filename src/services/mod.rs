@@ -1,3 +1,4 @@
+pub mod api_key_service;
 pub mod log_service;
 pub mod schema_service;
 

@@ -4,6 +4,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, types::ipnetwork::IpNetwork};
 
+use crate::dto::api_key_dto::CreateApiKeyRequest;
+
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct ApiKey {
     pub id: i32,
@@ -46,9 +48,39 @@ impl ApiKey {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct CreateApiKey {
     pub name: String,
     pub description: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub allowed_ips: Option<Vec<IpNetwork>>,
+}
+
+impl CreateApiKey {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            description: None,
+            expires_at: None,
+            allowed_ips: None,
+        }
+    }
+}
+
+impl From<CreateApiKeyRequest> for CreateApiKey {
+    fn from(value: CreateApiKeyRequest) -> Self {
+        CreateApiKey {
+            name: value.name,
+            description: value.description,
+            expires_at: value.expires_at,
+            allowed_ips: value.allowed_ips,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreatedApiKey {
+    #[serde(flatten)]
+    pub api_key: ApiKey,
+    pub plain_key: String,
 }
