@@ -1,7 +1,9 @@
 use log_server::{Log, Schema};
 use reqwest::StatusCode;
 
-use crate::common::{valid_log_payload, valid_schema_payload, ErrorResponse, TestContext};
+use crate::common::{
+    create_valid_log, create_valid_schema, delete_log, get_log, setup_test_app, ErrorResponse,
+};
 
 #[tokio::test]
 async fn deletes_existing_log_successfully() {

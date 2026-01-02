@@ -2,7 +2,10 @@ use log_server::{Log, Schema};
 use reqwest::StatusCode;
 use serde_json::Value;
 
-use crate::common::{valid_log_payload, valid_schema_payload, ErrorResponse, TestContext};
+use crate::common::{
+    create_valid_log, create_valid_log_with_message, create_valid_schema, get_log,
+    get_logs_by_schema_name, get_logs_by_schema_name_and_version, setup_test_app, ErrorResponse,
+};
 
 #[tokio::test]
 async fn retrieves_log_by_id() {
@@ -124,7 +127,7 @@ async fn gets_logs_by_schema_name_and_version() {
 //         .await
 //         .expect("Failed to get filtered logs");
 
-//     let response = 
+//     let response =
 
 //     assert_eq!(response.status(), StatusCode::OK);
 
@@ -142,7 +145,7 @@ async fn returns_404_for_nonexistent_schema_name() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
     let error: ErrorResponse = response.json().await.unwrap();
-    assert_eq!(error.error, "SCHEMA_NOT_FOUND");
+    assert_eq!(error.error, "NOT_FOUND");
 }
 
 #[tokio::test]

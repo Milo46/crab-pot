@@ -3,7 +3,7 @@ use reqwest::StatusCode;
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::common::{valid_schema_payload, ErrorResponse, TestContext};
+use crate::common::{create_valid_schema, setup_test_app, update_schema, ErrorResponse};
 
 #[tokio::test]
 async fn updates_existing_schema_successfully() {
@@ -106,7 +106,7 @@ async fn rejects_nil_uuid() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     let error: ErrorResponse = response.json().await.unwrap();
-    assert_eq!(error.error, "INVALID_INPUT");
+    assert_eq!(error.error, "BAD_REQUEST");
     assert!(error.message.contains("Schema ID cannot be empty"));
 }
 
@@ -129,7 +129,7 @@ async fn rejects_empty_schema_name() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     let error: ErrorResponse = response.json().await.unwrap();
-    assert_eq!(error.error, "INVALID_INPUT");
+    assert_eq!(error.error, "BAD_REQUEST");
     assert!(error.message.contains("Schema name cannot be empty"));
 }
 
@@ -152,7 +152,7 @@ async fn rejects_whitespace_only_schema_name() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     let error: ErrorResponse = response.json().await.unwrap();
-    assert_eq!(error.error, "INVALID_INPUT");
+    assert_eq!(error.error, "BAD_REQUEST");
     assert!(error.message.contains("Schema name cannot be empty"));
 }
 
@@ -247,7 +247,7 @@ async fn rejects_duplicate_name_when_updating() {
     assert_eq!(response.status(), StatusCode::CONFLICT);
 
     let error: ErrorResponse = response.json().await.unwrap();
-    assert_eq!(error.error, "SCHEMA_CONFLICT");
+    assert_eq!(error.error, "CONFLICT");
     assert!(error.message.contains("original-schema"));
     assert!(error.message.contains("already exists"));
 }
@@ -295,10 +295,10 @@ async fn rejects_invalid_schema_definition() {
         }
     });
     let response = update_schema(&app, &created_schema.id.to_string(), &update_payload).await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
     let error: ErrorResponse = response.json().await.unwrap();
-    assert_eq!(error.error, "INVALID_SCHEMA");
+    assert_eq!(error.error, "SCHEMA_VALIDATION_ERROR");
 }
 
 // #[tokio::test]

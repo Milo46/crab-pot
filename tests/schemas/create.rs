@@ -3,9 +3,7 @@ use reqwest::StatusCode;
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::common::{
-    valid_schema_payload, ErrorResponse, TestContext, TEST_SCHEMA_NAME, TEST_SCHEMA_VERSION,
-};
+use crate::common::{create_schema, create_valid_schema, setup_test_app, ErrorResponse};
 
 #[tokio::test]
 async fn creates_schema_with_valid_data() {

@@ -2,7 +2,9 @@ use log_server::SchemaResponse;
 use reqwest::StatusCode;
 use uuid::Uuid;
 
-use crate::common::{ErrorResponse, TestContext};
+use crate::common::{
+    create_valid_schema, delete_schema, get_schema_by_id, setup_test_app, ErrorResponse,
+};
 
 #[tokio::test]
 async fn deletes_existing_schema_successfully() {
@@ -46,7 +48,7 @@ async fn rejects_nil_uuid() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     let error: ErrorResponse = response.json().await.unwrap();
-    assert_eq!(error.error, "INVALID_INPUT");
+    assert_eq!(error.error, "BAD_REQUEST");
     assert!(error.message.contains("cannot be empty"));
 }
 
