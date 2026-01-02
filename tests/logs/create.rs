@@ -1,9 +1,9 @@
-use log_server::{ErrorResponse, Log, Schema};
+use log_server::{Log, Schema};
 use reqwest::StatusCode;
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::common::{routes::{logs::{create_log, create_valid_log}, schemas::create_valid_schema}, test_app::setup_test_app};
+use crate::common::{valid_log_payload, valid_schema_payload, ErrorResponse, TestContext};
 
 #[tokio::test]
 async fn creates_log_with_valid_data() {

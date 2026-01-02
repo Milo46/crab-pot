@@ -6,12 +6,11 @@ use axum::{
     Router,
 };
 use serde_json::json;
+use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-
-pub use middleware::request_id::{RequestIdLayer, RequestIdMakeSpan};
 
 pub mod dto;
 pub mod error;
@@ -21,16 +20,21 @@ pub mod models;
 pub mod repositories;
 pub mod services;
 
-pub use dto::{ErrorResponse, LogEvent, PaginatedLogsResponse, PaginationMetadata, SchemaResponse};
-pub use error::{AppError, AppResult};
-pub use handlers::{
-    create_log, create_schema, delete_log, delete_schema, get_log_by_id, get_logs_by_name,
-    get_logs_by_name_and_version, get_schema_by_id, get_schema_by_name_and_version, get_schemas,
-    query_logs_by_name, query_logs_by_name_and_version, update_schema, ws_handler,
+use crate::{
+    handlers::{
+        create_log, create_schema, delete_log, delete_schema, get_log_by_id, get_logs_by_name,
+        get_logs_by_name_and_version, get_schema_by_id, get_schema_by_name_and_version,
+        get_schemas, query_logs_by_name, query_logs_by_name_and_version, update_schema, ws_handler,
+    },
+    middleware::api_key_middleware,
 };
+
+pub use dto::{LogEvent, PaginatedLogsResponse, PaginationMetadata, SchemaResponse};
+pub use error::{AppError, AppResult};
+pub use middleware::request_id::{RequestIdLayer, RequestIdMakeSpan};
 pub use models::{Log, Schema};
-pub use repositories::{LogRepository, SchemaRepository};
-pub use services::{LogService, SchemaService};
+pub use repositories::{ApiKeyRepository, LogRepository, SchemaRepository};
+pub use services::{ApiKeyService, LogService, SchemaService};
 
 use crate::middleware::api_key_middleware;
 
@@ -38,6 +42,7 @@ use crate::middleware::api_key_middleware;
 pub struct AppState {
     pub schema_service: Arc<SchemaService>,
     pub log_service: Arc<LogService>,
+    pub api_key_service: Arc<ApiKeyService>,
     pub log_broadcast: broadcast::Sender<LogEvent>,
 }
 
@@ -45,11 +50,13 @@ impl AppState {
     pub fn new(
         schema_service: Arc<SchemaService>,
         log_service: Arc<LogService>,
+        api_key_service: Arc<ApiKeyService>,
         log_broadcast: broadcast::Sender<LogEvent>,
     ) -> Self {
         Self {
             schema_service,
             log_service,
+            api_key_service,
             log_broadcast,
         }
     }
@@ -64,7 +71,7 @@ async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
     })))
 }
 
-pub fn create_app(app_state: AppState) -> Router {
+pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
     let public_routes = Router::new()
         .route("/", get(health_check))
         .route("/health", get(health_check));
@@ -77,11 +84,7 @@ pub fn create_app(app_state: AppState) -> Router {
         .route("/schemas/{id}", delete(delete_schema))
         .route(
             "/schemas/{schema_name}/version/{schema_version}",
-<<<<<<< HEAD
             get(get_schema_by_name_and_version)
-=======
-            get(get_schema_by_name_and_version),
->>>>>>> feat/cli-http-client
         );
 
     let log_routes = Router::new()
@@ -99,22 +102,51 @@ pub fn create_app(app_state: AppState) -> Router {
         .route("/logs/{id}", get(get_log_by_id))
         .route("/logs/{id}", delete(delete_log));
 
-<<<<<<< HEAD
-    let ws_routes = Router::new()
-        .route("/ws/logs", get(ws_handler));
-=======
+
     let ws_routes = Router::new().route("/ws/logs", get(ws_handler));
->>>>>>> feat/cli-http-client
 
     let protected_routes = Router::new()
         .merge(schema_routes)
         .merge(log_routes)
         .merge(ws_routes)
-        .layer(axum_middleware::from_fn(api_key_middleware));
+        .layer(axum_middleware::from_fn_with_state(
+            app_state.clone(),
+            api_key_middleware,
+        ));
 
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
+        .with_state(app_state)
+        .layer(
+            ServiceBuilder::new()
+                .layer(axum_middleware::from_fn(RequestIdLayer::middleware))
+                .layer(TraceLayer::new_for_http().make_span_with(RequestIdMakeSpan))
+                .layer(CorsLayer::permissive()),
+        )
+}
+
+pub fn create_admin_app(app_state: AppState) -> Router {
+    use crate::handlers::{
+        create_api_key, delete_api_key, get_api_key_by_id, get_api_keys, rotate_api_key,
+    };
+
+    let admin_health_check = || async {
+        Json(json!({
+            "status": "healthy",
+            "service": "log-server-admin",
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        }))
+    };
+
+    Router::new()
+        .route("/", get(admin_health_check))
+        .route("/health", get(admin_health_check))
+        .route("/api-keys", post(create_api_key))
+        .route("/api-keys", get(get_api_keys))
+        .route("/api-keys/{key_id}", get(get_api_key_by_id))
+        .route("/api-keys/{key_id}", delete(delete_api_key))
+        .route("/api-keys/{key_id}/rotate", post(rotate_api_key))
         .with_state(app_state)
         .layer(
             ServiceBuilder::new()

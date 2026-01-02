@@ -1,11 +1,8 @@
-use log_server::{ErrorResponse, SchemaResponse};
+use log_server::SchemaResponse;
 use reqwest::StatusCode;
 use uuid::Uuid;
 
-use crate::common::{
-    routes::schemas::{create_valid_schema, delete_schema, get_schema_by_id},
-    test_app::setup_test_app,
-};
+use crate::common::{ErrorResponse, TestContext};
 
 #[tokio::test]
 async fn deletes_existing_schema_successfully() {

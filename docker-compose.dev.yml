@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass123}
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ./docker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/db:/docker-entrypoint-initdb.d:ro
     ports:
       - "5433:5432"
     networks:
@@ -22,11 +22,14 @@ services:
     container_name: log-server-app-dev
     restart: unless-stopped
     ports:
-      - "8081:8080"
+      - "8080:8080" # Main API
+      - "8081:8081" # Admin API
     environment:
       RUST_LOG: debug
       RUST_BACKTRACE: 1
       DATABASE_URL: postgresql://loguser:${POSTGRES_PASSWORD:-devpass123}@postgres:5432/logserver_dev
+      MAIN_API_ADDR: 0.0.0.0:8080
+      ADMIN_API_ADDR: 0.0.0.0:8081
       API_KEY: ${API_KEY}
     volumes:
       - ./src:/app/src:ro

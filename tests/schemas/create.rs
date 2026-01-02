@@ -1,11 +1,10 @@
-use log_server::{ErrorResponse, Schema};
+use log_server::Schema;
 use reqwest::StatusCode;
 use serde_json::json;
 use uuid::Uuid;
 
 use crate::common::{
-    routes::schemas::{create_schema, create_valid_schema},
-    test_app::setup_test_app,
+    valid_schema_payload, ErrorResponse, TestContext, TEST_SCHEMA_NAME, TEST_SCHEMA_VERSION,
 };
 
 #[tokio::test]

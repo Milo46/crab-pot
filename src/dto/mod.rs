@@ -1,29 +1,14 @@
-pub mod common;
+pub mod api_key_dto;
 pub mod log_dto;
 pub mod schema_dto;
 
-pub use common::ErrorResponse;
-
 pub use schema_dto::{
-    // Requests
-    CreateSchemaRequest,
-    DeleteSchemaQuery,
-    // Queries
-    GetSchemasQuery,
-    // Responses
-    SchemaResponse,
-    UpdateSchemaRequest,
+    CreateSchemaRequest, DeleteSchemaQuery, GetSchemasQuery, SchemaResponse, UpdateSchemaRequest,
 };
 
 pub use log_dto::{
-    // Requests
-    CreateLogRequest,
-    // WebSocket Events
-    LogEvent,
-    // Responses
-    LogResponse,
-    PaginatedLogsResponse,
-    PaginationMetadata,
-    // Queries
-    QueryLogsRequest,
+    CreateLogRequest, LogEvent, LogResponse, PaginatedLogsResponse, PaginationMetadata,
+    QueryLogsRequest, TimeWindowMetadata,
 };
+
+pub use api_key_dto::{ApiKeyResponse, ApiKeysResponse, CreateApiKeyRequest, CreateApiKeyResponse};

@@ -1,5 +1,6 @@
 use log_server::{
-    create_app, AppState, LogRepository, LogService, SchemaRepository, SchemaService,
+    create_admin_app, create_app, ApiKeyRepository, ApiKeyService, AppState, LogRepository,
+    LogService, SchemaRepository, SchemaService,
 };
 use std::net::SocketAddr;
 use std::{env, sync::Arc};
@@ -28,57 +29,86 @@ async fn main() -> anyhow::Result<()> {
 
     let schema_repository = Arc::new(SchemaRepository::new(pool.clone()));
     let log_repository = Arc::new(LogRepository::new(pool.clone()));
+    let api_key_repository = Arc::new(ApiKeyRepository::new(pool.clone()));
 
     let schema_service = Arc::new(SchemaService::new(
         schema_repository.clone(),
         log_repository.clone(),
     ));
     let log_service = Arc::new(LogService::new(log_repository.clone()));
+    let api_key_service = Arc::new(ApiKeyService::new(api_key_repository.clone()));
 
     let (log_broadcast_tx, _) = broadcast::channel(100);
 
     let app_state = AppState {
         schema_service,
         log_service,
+        api_key_service,
         log_broadcast: log_broadcast_tx,
     };
 
-    let app = create_app(app_state);
+    let app = create_app(app_state.clone(), pool);
+    let admin_app = create_admin_app(app_state.clone());
 
-    let span = tracing::info_span!("API Endpoints");
-    {
-        let _enter = span.enter();
-        tracing::info!("📊 Available endpoints:");
-        tracing::info!("Schemas:");
-        tracing::info!("  GET              /");
-        tracing::info!("  GET              /health");
-        tracing::info!("  GET, POST        /schemas");
-        tracing::info!("  GET, PUT, DELETE /schemas/id/{{uuid}}");
-        tracing::info!(
-            "  GET              /schemas/name/{{schema_name}}/version/{{schema_version}}"
-        );
-        tracing::info!("");
-        tracing::info!("Logs:");
-        tracing::info!("  POST             /logs");
-        tracing::info!("  GET              /logs/schema/{{schema_name}}");
-        tracing::info!("  POST             /logs/schema/{{schema_name}}/query");
-        tracing::info!(
-            "  GET              /logs/schema/{{schema_name}}/version/{{schema_version}}"
-        );
-        tracing::info!(
-            "  POST             /logs/schema/{{schema_name}}/version/{{schema_version}}/query"
-        );
-        tracing::info!("  GET, DELETE      /logs/{{id}}");
-        tracing::info!("");
-        tracing::info!("WebSocket:");
-        tracing::info!("  GET              /ws/logs");
-    }
+    tracing::info!("📊 Main API endpoints:");
+    tracing::info!("   GET    /                     - Health check");
+    tracing::info!("   GET    /health               - Health check");
+    tracing::info!("   GET    /ws/logs              - WebSocket for live log updates");
+    tracing::info!("   GET    /schemas              - Get all schemas");
+    tracing::info!("   POST   /schemas              - Create new schema");
+    tracing::info!("   GET    /schemas/:id          - Get schema by ID");
+    tracing::info!("   PUT    /schemas/:id          - Update schema");
+    tracing::info!("   DELETE /schemas/:id          - Delete schema");
+    tracing::info!("   POST   /logs                      - Create new log entry");
+    tracing::info!("   GET    /logs/schema/:schema_id - Get logs by schema ID");
+    tracing::info!("   GET    /logs/:id               - Get log by ID");
+    tracing::info!("   DELETE /logs/:id               - Delete log");
+    tracing::info!("");
+    tracing::info!("🔐 Admin API endpoints:");
+    tracing::info!("   GET    /health               - Admin health check");
+    tracing::info!("   POST   /api-keys             - Create new API key");
+    tracing::info!("   GET    /api-keys             - List all API keys");
+    tracing::info!("   GET    /api-keys/:id         - Get API key by ID");
+    tracing::info!("   DELETE /api-keys/:id         - Delete API key");
+    tracing::info!("   POST   /api-keys/:id/rotate  - Rotate API key");
 
-    let addr: SocketAddr = "0.0.0.0:8080".parse()?;
-    tracing::info!("🚀 Log Server running at http://{}", addr);
+    let main_addr: SocketAddr = env::var("MAIN_API_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
+        .parse()?;
 
-    let listener = TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    let admin_addr: SocketAddr = env::var("ADMIN_API_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1:8081".to_string())
+        .parse()?;
 
+    tracing::info!("");
+    tracing::info!("🚀 Main API Server running at http://{}", main_addr);
+    tracing::info!("🔐 Admin API Server running at http://{}", admin_addr);
+    tracing::info!("");
+    tracing::warn!(
+        "⚠️  SECURITY: Admin API is bound to {}. Ensure this is properly secured!",
+        admin_addr
+    );
+    tracing::warn!("⚠️  For production, bind admin API to 127.0.0.1 and use SSH tunnel or VPN.");
+
+    let main_listener = TcpListener::bind(main_addr).await?;
+    let admin_listener = TcpListener::bind(admin_addr).await?;
+
+    let admin_server = tokio::spawn(async move {
+        tracing::info!("Starting Admin API server...");
+        if let Err(e) = axum::serve(admin_listener, admin_app).await {
+            tracing::error!("Admin API server error: {}", e);
+        }
+    });
+
+    tracing::info!("Starting Main API server...");
+    let main_result = axum::serve(
+        main_listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await;
+
+    let _ = tokio::join!(admin_server);
+
+    main_result?;
     Ok(())
 }
