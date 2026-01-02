@@ -1,9 +1,9 @@
-use log_server::{ErrorResponse, Schema};
+use log_server::Schema;
 use reqwest::StatusCode;
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::common::{valid_schema_payload, TestContext};
+use crate::common::{valid_schema_payload, ErrorResponse, TestContext};
 
 #[tokio::test]
 async fn updates_existing_schema_successfully() {

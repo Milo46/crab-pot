@@ -6,8 +6,8 @@ use axum::{
 
 use crate::{
     dto::{
-        log_dto::QueryParams, CreateLogRequest, ErrorResponse, LogEvent, LogResponse,
-        PaginatedLogsResponse, QueryLogsRequest,
+        log_dto::QueryParams, CreateLogRequest, LogEvent, LogResponse, PaginatedLogsResponse,
+        QueryLogsRequest,
     },
     error::WithRequestId,
     middleware::RequestId,

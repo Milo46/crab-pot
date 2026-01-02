@@ -1,9 +1,6 @@
 pub mod api_key_dto;
-pub mod common;
 pub mod log_dto;
 pub mod schema_dto;
-
-pub use common::ErrorResponse;
 
 pub use schema_dto::{
     CreateSchemaRequest, DeleteSchemaQuery, GetSchemasQuery, SchemaResponse, UpdateSchemaRequest,

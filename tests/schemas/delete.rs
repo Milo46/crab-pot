@@ -1,8 +1,8 @@
-use log_server::{ErrorResponse, SchemaResponse};
+use log_server::SchemaResponse;
 use reqwest::StatusCode;
 use uuid::Uuid;
 
-use crate::common::TestContext;
+use crate::common::{ErrorResponse, TestContext};
 
 #[tokio::test]
 async fn deletes_existing_schema_successfully() {

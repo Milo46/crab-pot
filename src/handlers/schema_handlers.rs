@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     dto::{
-        CreateSchemaRequest, DeleteSchemaQuery, ErrorResponse, GetSchemasQuery, SchemaResponse,
+        CreateSchemaRequest, DeleteSchemaQuery, GetSchemasQuery, SchemaResponse,
         UpdateSchemaRequest,
     },
     middleware::RequestId,

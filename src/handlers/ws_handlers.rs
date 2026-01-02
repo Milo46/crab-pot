@@ -11,7 +11,7 @@ use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{dto::ErrorResponse, AppResult};
+use crate::AppResult;
 use crate::{middleware::RequestId, AppState};
 
 #[derive(Debug, Deserialize)]

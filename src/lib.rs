@@ -22,7 +22,7 @@ pub mod models;
 pub mod repositories;
 pub mod services;
 
-pub use dto::{ErrorResponse, LogEvent, PaginatedLogsResponse, PaginationMetadata, SchemaResponse};
+pub use dto::{LogEvent, PaginatedLogsResponse, PaginationMetadata, SchemaResponse};
 pub use error::{AppError, AppResult};
 pub use handlers::{
     create_log, create_schema, delete_log, delete_schema, get_log_by_id, get_logs_by_name,
