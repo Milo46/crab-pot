@@ -11,24 +11,33 @@
   - [4.3 Query & Filtering](#43-query--filtering)
   - [4.4 Real-time Events](#44-real-time-events)
   - [4.5 System Operations](#45-system-operations)
+  - [4.6 API Key Management](#46-api-key-management)
 - [5. API Endpoints](#5-api-endpoints)
-  - [5.1 POST /schemas](#51-post-schemas)
-  - [5.2 GET /schemas](#52-get-schemas)
-  - [5.3 GET /schemas/{id}](#53-get-schemasid)
-  - [5.4 GET /schemas/{schema_name}/versions/{schema_version}](#54-get-schemasschema_nameversionsschema_version)
-  - [5.5 PUT /schemas/{id}](#55-put-schemasid)
-  - [5.6 DELETE /schemas/{id}](#56-delete-schemasid)
-  - [5.7 POST /logs](#57-post-logs)
-  - [5.8 GET /logs/schema/{schema_name}](#58-get-logsschemaschema_name)
-  - [5.9 GET /logs/schema/{schema_name}/versions/{schema_version}](#59-get-logsschemaschema_nameversionsschema_version)
-  - [5.10 POST /logs/schema/{schema_name}/query](#510-post-logsschemaschema_namequery)
-  - [5.11 POST /logs/schema/{schema_name}/versions/{schema_version}/query](#511-post-logsschemaschema_nameversionsschema_versionquery)
-  - [5.12 GET /logs/{id}](#512-get-logsid)
-  - [5.13 DELETE /logs/{id}](#513-delete-logsid)
-  - [5.14 GET /ws/logs](#514-get-wslogs)
-  - [5.15 GET /health](#515-get-health)
-  - [5.16 Request Tracking](#516-request-tracking)
-  - [5.17 Error Handling](#517-error-handling)
+  - [5.1 Main API (Port 8080)](#51-main-api-port-8080)
+    - [5.1.1 POST /schemas](#511-post-schemas)
+    - [5.1.2 GET /schemas](#512-get-schemas)
+    - [5.1.3 GET /schemas/{id}](#513-get-schemasid)
+    - [5.1.4 GET /schemas/{schema_name}/versions/{schema_version}](#514-get-schemasschema_nameversionsschema_version)
+    - [5.1.5 PUT /schemas/{id}](#515-put-schemasid)
+    - [5.1.6 DELETE /schemas/{id}](#516-delete-schemasid)
+    - [5.1.7 POST /logs](#517-post-logs)
+    - [5.1.8 GET /logs/schema/{schema_name}](#518-get-logsschemaschema_name)
+    - [5.1.9 GET /logs/schema/{schema_name}/versions/{schema_version}](#519-get-logsschemaschema_nameversionsschema_version)
+    - [5.1.10 POST /logs/schema/{schema_name}/query](#5110-post-logsschemaschema_namequery)
+    - [5.1.11 POST /logs/schema/{schema_name}/versions/{schema_version}/query](#5111-post-logsschemaschema_nameversionsschema_versionquery)
+    - [5.1.12 GET /logs/{id}](#5112-get-logsid)
+    - [5.1.13 DELETE /logs/{id}](#5113-delete-logsid)
+    - [5.1.14 GET /ws/logs](#5114-get-wslogs)
+    - [5.1.15 GET /health](#5115-get-health)
+  - [5.2 Admin API (Port 8081)](#52-admin-api-port-8081)
+    - [5.2.1 POST /api-keys](#521-post-api-keys)
+    - [5.2.2 GET /api-keys](#522-get-api-keys)
+    - [5.2.3 GET /api-keys/{key_id}](#523-get-api-keyskey_id)
+    - [5.2.4 DELETE /api-keys/{key_id}](#524-delete-api-keyskey_id)
+    - [5.2.5 POST /api-keys/{key_id}/rotate](#525-post-api-keyskey_idrotate)
+    - [5.2.6 GET /health](#526-get-health)
+  - [5.3 Request Tracking](#53-request-tracking)
+  - [5.4 Error Handling](#54-error-handling)
 - [6. Non-Functional Requirements](#6-non-functional-requirements)
 - [7. System Architecture](#7-system-architecture)
 - [8. Data Models](#8-data-models)
@@ -139,6 +148,25 @@ This section defines the functional requirements using testable, verifiable stat
 | FR-504 | The system SHALL generate a UUID for requests without X-Request-ID header | Must |
 | FR-505 | The system SHALL echo the X-Request-ID in all responses | Must |
 | FR-506 | The system SHALL include request IDs in all server logs for correlation | Should |
+
+### 4.6 API Key Management
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-601 | The system SHALL provide a separate Admin API on a different port for security | Must |
+| FR-602 | The system SHALL allow creation of API keys with name, description, expiration, and IP restrictions | Must |
+| FR-603 | The system SHALL generate secure random API keys with SHA-256 hashing | Must |
+| FR-604 | The system SHALL store only hashed API keys in the database | Must |
+| FR-605 | The system SHALL return the plain-text API key only once upon creation | Must |
+| FR-606 | The system SHALL support listing all API keys with metadata (excluding plain key) | Must |
+| FR-607 | The system SHALL support retrieving individual API key details by ID | Must |
+| FR-608 | The system SHALL support API key rotation (generate new key, invalidate old) | Must |
+| FR-609 | The system SHALL support API key deletion | Must |
+| FR-610 | The system SHALL validate API keys using Bearer token authentication | Must |
+| FR-611 | The system SHALL check API key expiration before allowing requests | Must |
+| FR-612 | The system SHALL enforce IP address restrictions when configured | Should |
+| FR-613 | The system SHALL track API key usage (last_used_at, usage_count) | Should |
+| FR-614 | The Admin API SHALL be bound to localhost by default for security | Must |
 | FR-507 | The system SHALL return appropriate HTTP status codes for all error conditions | Must |
 | FR-508 | The system SHALL return descriptive error messages in a consistent JSON format | Must |
 
@@ -146,9 +174,26 @@ This section defines the functional requirements using testable, verifiable stat
 
 ## 5. API Endpoints
 
-This section provides detailed API endpoint documentation including request/response formats and examples.
+Log Server operates with **two separate HTTP servers** for enhanced security:
 
-### 5.1 POST /schemas
+1. **Main API (Port 8080)** - Public-facing API for schemas, logs, and real-time events
+   - Requires API key authentication (Bearer token)
+   - Accessible from external networks
+   - Handles all log and schema operations
+
+2. **Admin API (Port 8081)** - Administrative interface for API key management
+   - No authentication required (network-level security)
+   - Bound to localhost (127.0.0.1) by default
+   - Access via SSH tunnel or local machine only
+   - Manages API key lifecycle
+
+This architectural separation ensures that administrative operations are isolated from public-facing services and can be secured at the network level.
+
+### 5.1 Main API (Port 8080)
+
+All Main API endpoints require authentication via Bearer token in the `Authorization` header, except for `/health`.
+
+#### 5.1.1 POST /schemas
 
 * Accepts a JSON Schema definition that will be used to validate log entries
 * Required fields: `name`, `version`, `schema_definition`
@@ -435,7 +480,217 @@ Log Deleted Event:
     }
     ```
 
-### 5.12 Request Tracking
+---
+
+### 5.2 Admin API (Port 8081)
+
+The Admin API is a **separate HTTP server** dedicated to API key management operations. For security:
+- Bound to `127.0.0.1:8081` by default (localhost only)
+- No authentication required (relies on network-level security)
+- Access via SSH tunnel for remote administration
+- Not exposed to public networks in production
+
+**Environment Variables:**
+- `ADMIN_API_ADDR` - Admin API bind address (default: `127.0.0.1:8081`)
+- `MAIN_API_ADDR` - Main API bind address (default: `0.0.0.0:8080`)
+
+**Security Best Practices:**
+1. Keep Admin API bound to localhost
+2. Use SSH tunneling for remote access: `ssh -L 8081:localhost:8081 user@server`
+3. Use firewall rules to restrict access
+4. Deploy behind VPN for team access
+5. Never expose Admin API directly to the internet
+
+#### 5.2.1 POST /api-keys
+
+Creates a new API key for accessing the Main API.
+
+**Request:**
+```json
+{
+  "name": "Production API Key",
+  "description": "Key for production services",
+  "expires_at": "2026-12-31T23:59:59Z",
+  "allowed_ips": "192.168.1.0/24,10.0.0.5"
+}
+```
+
+**Request Fields:**
+* `name` (required, string): Descriptive name for the API key
+* `description` (optional, string): Additional details about key usage
+* `expires_at` (optional, string): ISO 8601 timestamp for key expiration
+* `allowed_ips` (optional, string): Comma-separated list of CIDR blocks or IP addresses
+
+**Response (201 Created):**
+```json
+{
+  "id": 1,
+  "key": "sk_abc123def456...",
+  "key_prefix": "sk_abc123...",
+  "name": "Production API Key",
+  "created_at": "2026-01-02T10:00:00Z",
+  "expires_at": "2026-12-31T23:59:59Z"
+}
+```
+
+**⚠️ Important:** The `key` field is shown **only once**. Save it immediately - it cannot be retrieved again.
+
+**Example:**
+```bash
+curl -X POST http://127.0.0.1:8081/api-keys \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Development Key",
+    "description": "For local testing"
+  }'
+```
+
+#### 5.2.2 GET /api-keys
+
+Lists all API keys with their metadata (plain keys are never returned).
+
+**Response (200 OK):**
+```json
+{
+  "api_keys": [
+    {
+      "id": 1,
+      "key_prefix": "sk_abc123...",
+      "name": "Production API Key",
+      "description": "Key for production services",
+      "created_at": "2026-01-02T10:00:00Z",
+      "last_used_at": "2026-01-02T15:30:00Z",
+      "expires_at": "2026-12-31T23:59:59Z",
+      "is_active": true,
+      "allowed_ips": ["192.168.1.0/24", "10.0.0.5"],
+      "usage_count": 1250
+    }
+  ]
+}
+```
+
+**Response Fields:**
+* `key_prefix`: First 13 characters of the key (for identification)
+* `last_used_at`: Timestamp of last successful authentication
+* `usage_count`: Number of times the key has been used
+* `is_active`: Whether the key is currently active
+
+**Example:**
+```bash
+curl http://127.0.0.1:8081/api-keys
+```
+
+#### 5.2.3 GET /api-keys/{key_id}
+
+Retrieves details of a specific API key by its ID.
+
+**Path Parameters:**
+* `key_id` (integer): The API key ID
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "key_prefix": "sk_abc123...",
+  "name": "Production API Key",
+  "description": "Key for production services",
+  "created_at": "2026-01-02T10:00:00Z",
+  "last_used_at": "2026-01-02T15:30:00Z",
+  "expires_at": "2026-12-31T23:59:59Z",
+  "is_active": true,
+  "allowed_ips": ["192.168.1.0/24"],
+  "usage_count": 1250
+}
+```
+
+**Error Responses:**
+* `404 Not Found`: API key with the specified ID does not exist
+
+**Example:**
+```bash
+curl http://127.0.0.1:8081/api-keys/1
+```
+
+#### 5.2.4 DELETE /api-keys/{key_id}
+
+Permanently deletes an API key. The key will immediately become invalid for authentication.
+
+**Path Parameters:**
+* `key_id` (integer): The API key ID to delete
+
+**Response (204 No Content):**
+No response body.
+
+**Error Responses:**
+* `404 Not Found`: API key with the specified ID does not exist
+
+**Example:**
+```bash
+curl -X DELETE http://127.0.0.1:8081/api-keys/1
+```
+
+**⚠️ Warning:** This operation is irreversible. All services using this key will immediately lose access.
+
+#### 5.2.5 POST /api-keys/{key_id}/rotate
+
+Rotates an API key by generating a new key and invalidating the old one. All metadata (name, description, expiration, IP restrictions) is preserved.
+
+**Path Parameters:**
+* `key_id` (integer): The API key ID to rotate
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "key": "sk_new_xyz789...",
+  "key_prefix": "sk_new_xyz...",
+  "name": "Production API Key",
+  "created_at": "2026-01-02T10:00:00Z",
+  "expires_at": "2026-12-31T23:59:59Z"
+}
+```
+
+**⚠️ Important:** 
+- The new `key` is shown **only once**
+- The old key becomes **immediately invalid**
+- Update all services to use the new key before the rotation completes
+
+**Use Cases:**
+* Regular security key rotation (e.g., every 90 days)
+* After suspected key compromise
+* When migrating services to new credentials
+
+**Example:**
+```bash
+curl -X POST http://127.0.0.1:8081/api-keys/1/rotate
+```
+
+**Error Responses:**
+* `404 Not Found`: API key with the specified ID does not exist
+
+#### 5.2.6 GET /health
+
+Admin API health check endpoint.
+
+**Response (200 OK):**
+```json
+{
+  "status": "healthy",
+  "service": "log-server-admin",
+  "timestamp": "2026-01-02T10:00:00Z"
+}
+```
+
+Also available at `GET /` (root path).
+
+**Example:**
+```bash
+curl http://127.0.0.1:8081/health
+```
+
+---
+
+### 5.3 Request Tracking
 
 All API endpoints support request tracking through the `X-Request-ID` header for distributed tracing and debugging.
 
@@ -491,14 +746,28 @@ Content-Type: application/json
 * Log format: `[request_id=<id>] <log message>`
 * Enables quick filtering and debugging of specific requests
 
-### 5.13 Error Handling
+### 5.4 Error Handling
 
 * HTTP 400: Invalid JSON, missing required fields, or invalid schema_id
+* HTTP 401: Missing or invalid API key (Main API only)
+* HTTP 403: Valid API key but access forbidden (expired, IP restriction, inactive)
+* HTTP 404: Resource not found (schema, log, or API key)
 * HTTP 422: Valid JSON but fails schema validation (for logs) or invalid JSON Schema (for schemas)
-* HTTP 404: Schema not found for the provided schema_id
 * HTTP 500: Internal server errors (database connectivity, etc.)
 * All error responses include descriptive error messages and validation details
 * All error responses include the `X-Request-ID` header for debugging
+
+**Error Response Format:**
+```json
+{
+  "error": "ERROR_CODE",
+  "message": "Human-readable error description",
+  "field_errors": {
+    "field_name": ["validation error details"]
+  },
+  "request_id": "uuid-v4-or-client-provided"
+}
+```
 
 ## 6. Non-Functional Requirements
 
@@ -534,25 +803,110 @@ Content-Type: application/json
 
 ## 7. System Architecture
 
-Components:
+### 7.1 Dual-Server Architecture
 
-* `app`: Rust-based HTTP server handling requests and DB communication.
-* `db`: PostgreSQL database container storing logs.
-* `docker-compose.yml`: Defines both services, volumes and internal network.
+Log Server implements a **security-first architecture** with two separate HTTP servers:
 
-### 7.1 Technology Stack
+```
+┌─────────────────────────────────────────────┐
+│          Main API (Port 8080)               │
+│  ┌──────────────────────────────────────┐   │
+│  │  Public Routes (No Auth Required)    │   │
+│  │  • GET  /health                      │   │
+│  │  • GET  /                            │   │
+│  └──────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────┐   │
+│  │  Protected Routes (API Key Auth)     │   │
+│  │  • All /schemas/* endpoints          │   │
+│  │  • All /logs/* endpoints             │   │
+│  │  • GET /ws/logs (WebSocket)          │   │
+│  └──────────────────────────────────────┘   │
+│                                               │
+│  Binding: 0.0.0.0:8080 (public-facing)      │
+│  Auth: Bearer token (API key)                │
+└─────────────────────────────────────────────┘
 
-* **Backend**: Rust with Axum web framework
-* **Database**: PostgreSQL 15+
+┌─────────────────────────────────────────────┐
+│         Admin API (Port 8081)               │
+│  ┌──────────────────────────────────────┐   │
+│  │  API Key Management (No App Auth)    │   │
+│  │  • POST   /api-keys                  │   │
+│  │  • GET    /api-keys                  │   │
+│  │  • GET    /api-keys/{id}             │   │
+│  │  • DELETE /api-keys/{id}             │   │
+│  │  • POST   /api-keys/{id}/rotate      │   │
+│  │  • GET    /health                    │   │
+│  └──────────────────────────────────────┘   │
+│                                               │
+│  Binding: 127.0.0.1:8081 (localhost only)   │
+│  Auth: Network-level security (SSH, VPN)     │
+└─────────────────────────────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────────────────┐
+│      PostgreSQL Database (Port 5432)        │
+│  • schemas table (UUID, JSONB)              │
+│  • logs table (schema_id FK, JSONB)         │
+│  • api_keys table (hash, metadata)          │
+└─────────────────────────────────────────────┘
+```
+
+**Key Architectural Decisions:**
+
+1. **Separation of Concerns**: Administrative functions isolated from public API
+2. **Defense in Depth**: Admin API secured at network level, Main API at application level
+3. **Least Privilege**: Admin API not accessible from external networks by default
+4. **Stateless Design**: Both APIs are stateless for horizontal scaling
+
+### 7.2 Technology Stack
+
+* **Backend**: Rust 1.82+ with Axum 0.8 web framework
+* **Database**: PostgreSQL 16+ with JSONB support
 * **Containerization**: Docker and Docker Compose
 * **Serialization**: JSON with serde
-* **Database Access**: SQLx for async PostgreSQL operations
+* **Database Access**: SQLx for async PostgreSQL operations with compile-time verification
+* **Cryptography**: SHA-256 for API key hashing
+* **WebSocket**: Native Axum WebSocket support for real-time events
 
-### 7.2 Network Architecture
+### 7.3 Network Architecture
 
-* Internal Docker network for app-database communication
-* Exposed HTTP port (default: 8080) for external API access
-* Database port not exposed externally for security
+**Production Deployment:**
+* Main API: Exposed on public network (e.g., `0.0.0.0:8080`)
+* Admin API: Bound to localhost (`127.0.0.1:8081`)
+* Database: Internal Docker network only, not exposed externally
+* Access Admin API via:
+  - SSH tunnel: `ssh -L 8081:localhost:8081 user@server`
+  - VPN connection
+  - Jump host/bastion server
+
+**Development Setup:**
+* Main API: `localhost:8080`
+* Admin API: `localhost:8081` (exposed for convenience)
+* Database: `localhost:5432` (exposed for direct access)
+
+### 7.4 Security Model
+
+**Main API Security:**
+* API key authentication via `Authorization: Bearer` header
+* Key validation against database (hashed comparison)
+* Automatic expiration checking
+* Optional IP address restriction enforcement
+* Usage tracking for audit purposes
+
+**Admin API Security:**
+* Network isolation (localhost binding)
+* No application-level authentication (admins manage keys)
+* Access control via:
+  - SSH key authentication
+  - VPN membership
+  - Firewall rules
+  - Network policies (Kubernetes)
+
+**Database Security:**
+* Only hashed API keys stored (SHA-256)
+* Parameterized queries prevent SQL injection
+* Connection pooling with secure credentials
+* Internal network communication only
 
 ## 8. Data Models
 
@@ -579,6 +933,21 @@ CREATE TABLE logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Table for storing API keys
+CREATE TABLE api_keys (
+    id SERIAL PRIMARY KEY,
+    key_hash VARCHAR(64) NOT NULL UNIQUE,
+    key_prefix VARCHAR(20),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    allowed_ips INET[],
+    usage_count BIGINT DEFAULT 0
+);
+
 -- Indexes for performance
 CREATE INDEX idx_logs_schema_id ON logs(schema_id);
 CREATE INDEX idx_logs_created_at ON logs(created_at);
@@ -587,7 +956,24 @@ CREATE INDEX idx_schemas_name_version ON schemas(name, version);
 
 -- GIN index for JSON queries on log data
 CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
+
+-- Indexes for API key operations
+CREATE UNIQUE INDEX idx_api_keys_key_hash ON api_keys(key_hash);
+CREATE INDEX idx_api_keys_is_active ON api_keys(is_active) WHERE is_active = TRUE;
+CREATE INDEX idx_api_keys_expires_at ON api_keys(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX idx_api_keys_last_used_at ON api_keys(last_used_at);
 ```
+
+**Table Relationships:**
+* `logs.schema_id` → `schemas.id` (foreign key, enforces referential integrity)
+* `api_keys` is independent (no foreign keys to other tables)
+
+**Key Design Decisions:**
+* **schemas**: UUID primary key for globally unique identifiers
+* **logs**: SERIAL for auto-increment, efficient integer-based lookups
+* **api_keys**: SERIAL for simple integer IDs, hash for security
+* **JSONB**: Flexible schema definition and log data storage with indexing support
+* **INET[]**: Array type for storing multiple IP addresses/CIDR blocks
 
 ### 8.2 API Response Models
 
@@ -632,6 +1018,41 @@ CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
 }
 ```
 
+**API Key Response (List/Get):**
+
+```json
+{
+    "id": 1,
+    "key_prefix": "lgs_prod_abc",
+    "name": "Production App Key",
+    "description": "API key for production application server",
+    "created_at": "2025-10-23T09:00:00Z",
+    "last_used_at": "2025-10-23T10:30:00Z",
+    "expires_at": "2026-10-23T09:00:00Z",
+    "is_active": true,
+    "allowed_ips": ["192.168.1.100", "10.0.0.0/24"],
+    "usage_count": 1542
+}
+```
+
+**API Key Creation Response:**
+
+```json
+{
+    "id": 1,
+    "key_prefix": "lgs_prod_abc",
+    "name": "Production App Key",
+    "description": "API key for production application server",
+    "created_at": "2025-10-23T09:00:00Z",
+    "expires_at": "2026-10-23T09:00:00Z",
+    "is_active": true,
+    "allowed_ips": ["192.168.1.100", "10.0.0.0/24"],
+    "api_key": "lgs_prod_abc_def123456789..."
+}
+```
+
+**Note:** The `api_key` field (full plaintext key) is ONLY returned on creation or rotation. Store it securely—it cannot be retrieved again.
+
 **Schema Validation Error Response:**
 
 ```json
@@ -664,11 +1085,17 @@ CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
 
 ### 9.3 Request Headers
 
-**Standard Headers:**
+**Main API (Port 8080) Headers:**
 * `Content-Type: application/json` (required for POST/PUT requests)
+* `Authorization: Bearer <api-key>` (required for all endpoints except `/health`)
 * `X-Request-ID: <request-id>` (optional, for request tracking)
   * If not provided, server generates a UUID v4
   * Returned in response headers for correlation
+
+**Admin API (Port 8081) Headers:**
+* `Content-Type: application/json` (required for POST requests)
+* `X-Request-ID: <request-id>` (optional, for request tracking)
+* **No authentication headers required** (secured at network level)
 
 **Response Headers:**
 * `Content-Type: application/json`
@@ -677,25 +1104,89 @@ CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
 
 ### 9.4 Authentication
 
-* **Current (v1.0.0)**: No authentication implemented
-  * All endpoints are publicly accessible
-  * Suitable for development environments and trusted internal networks only
-  * **Not recommended for production without network-level security**
-* **Planned (v1.1.0+)**: Optional API key authentication
-  * Environment variable-based API key configuration
-  * Header-based authentication (`X-API-Key`)
-  * Public endpoints: `/`, `/health`
-  * Protected endpoints: All schema and log management operations
-* **Future (v2.0.0)**: Advanced authentication & authorization
-  * JWT-based authentication
-  * Role-based access control (RBAC)
-  * Multi-tenant support
+**Current Implementation (v1.2.0+)**: API Key Authentication with Dual-Server Architecture
+
+#### Main API (Port 8080) - API Key Required
+* **Authentication Method**: Bearer token authentication
+* **Header Format**: `Authorization: Bearer sk_<your_api_key>`
+* **Protected Endpoints**: All schema and log operations, WebSocket
+* **Public Endpoints**: `/health`, `/` (root)
+* **Key Features**:
+  - SHA-256 hashed keys stored in database
+  - Optional expiration date enforcement
+  - IP address restriction support (CIDR blocks)
+  - Usage tracking (last_used_at, usage_count)
+  - Automatic expiration checking
+
+**Example Authenticated Request:**
+```bash
+curl -X POST http://localhost:8080/schemas \
+  -H "Authorization: Bearer sk_abc123def456..." \
+  -H "Content-Type: application/json" \
+  -d '{"name": "test-schema", "version": "1.0.0", ...}'
+```
+
+#### Admin API (Port 8081) - Network-Level Security
+* **Authentication Method**: Network isolation (no application-level auth)
+* **Default Binding**: `127.0.0.1:8081` (localhost only)
+* **Access Methods**:
+  - Local machine access
+  - SSH tunnel: `ssh -L 8081:localhost:8081 user@server`
+  - VPN for team access
+  - Reverse proxy with additional authentication
+* **Security Model**: 
+  - Administrative operations isolated on separate port
+  - Not exposed to public internet
+  - Relies on network-level access control
+  - No API keys needed (admin manages the keys themselves)
+
+**Example SSH Tunnel Access:**
+```bash
+# Create SSH tunnel
+ssh -L 8081:localhost:8081 user@production-server
+
+# In another terminal, access admin API
+curl http://localhost:8081/api-keys
+```
+
+#### API Key Lifecycle
+1. **Creation**: Admin creates key via Admin API (`POST /api-keys`)
+2. **Distribution**: Plain key shown once, must be saved by recipient
+3. **Usage**: Key used for Main API authentication
+4. **Monitoring**: Track usage via Admin API (`GET /api-keys`)
+5. **Rotation**: Generate new key, invalidate old (`POST /api-keys/{id}/rotate`)
+6. **Deletion**: Permanently remove key (`DELETE /api-keys/{id}`)
+
+#### Security Features
+* **Hashing**: Only SHA-256 hashes stored in database
+* **One-time Display**: Plain keys shown only on creation/rotation
+* **Expiration**: Optional automatic expiration enforcement
+* **IP Restrictions**: Limit key usage to specific IP addresses/CIDR blocks
+* **Revocation**: Keys can be marked inactive without deletion
+* **Audit Trail**: Track creation time, last usage, usage count
+
+**Environment Variables:**
+* `MAIN_API_ADDR`: Main API bind address (default: `0.0.0.0:8080`)
+* `ADMIN_API_ADDR`: Admin API bind address (default: `127.0.0.1:8081`)
+* `DATABASE_URL`: PostgreSQL connection string
+
+**Previous Versions:**
+* **v1.0.0**: No authentication - all endpoints publicly accessible
+  * Suitable only for development and trusted internal networks
+* **v1.1.0**: Single-key environment variable authentication (deprecated)
+
+**Future Enhancements (v2.0.0+)**:
+* Role-based access control (RBAC) for API keys
+* JWT-based authentication for user sessions
+* Multi-tenant support with organization isolation
+* OAuth2/OIDC integration
 
 ### 9.5 Rate Limiting
 
 * Default: 1000 requests per minute per IP
 * Configurable via environment variables
 * Returns HTTP 429 when exceeded
+* Applied independently to Main API and Admin API
 
 ### 9.6 Schema Validation
 
@@ -706,9 +1197,10 @@ CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
 
 ## 10. Version Information
 
-* **Current Version**: 1.0.0
+* **Current Version**: 1.2.0
 * **API Version**: v1
-* **Database Schema Version**: 1.0
+* **Database Schema Version**: 1.1 (includes api_keys table)
+* **Release Date**: January 2026
 * **Compatibility**:
   * Rust 1.82+ (2021 edition)
   * PostgreSQL 16+
@@ -726,10 +1218,12 @@ CREATE INDEX idx_logs_data_gin ON logs USING GIN (log_data);
 
 ### 11.1 Phase 2 Features
 
-* **Authentication & Authorization**
-  * JWT-based authentication
-  * Role-based access control
-  * API key management
+* **Advanced Authentication & Authorization**
+  * ~~JWT-based authentication~~ *Deferred - API key authentication currently sufficient*
+  * Role-based access control (RBAC)
+  * ~~API key management~~ ✅ **Implemented in v1.2.0**
+  * Multi-tenant API key scoping
+  * Granular permission system
 
 * **Advanced Querying**
   * Full-text search in log messages
