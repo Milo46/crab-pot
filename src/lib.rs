@@ -33,15 +33,7 @@ pub use models::{Log, Schema};
 pub use repositories::{LogRepository, SchemaRepository};
 pub use services::{LogService, SchemaService};
 
-use crate::{
-    // handlers::{create_api_key, delete_api_key, get_api_key_by_id, get_api_keys},
-    handlers::{
-        api_key_handlers::{delete_api_key, get_api_key_by_id, get_api_keys, rotate_api_key},
-        create_api_key,
-    },
-    middleware::api_key_middleware,
-    services::api_key_service::ApiKeyService,
-};
+use crate::{middleware::api_key_middleware, services::api_key_service::ApiKeyService};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -77,17 +69,9 @@ async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
 }
 
 pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
-    let api_keys_routes = Router::new()
-        .route("/api-keys", post(create_api_key))
-        .route("/api-keys", get(get_api_keys))
-        .route("/api-keys/{key_id}", get(get_api_key_by_id))
-        .route("/api-keys/{key_id}", delete(delete_api_key))
-        .route("/api-keys/{key_id}/rotate", post(rotate_api_key));
-
     let public_routes = Router::new()
         .route("/", get(health_check))
-        .route("/health", get(health_check))
-        .merge(api_keys_routes);
+        .route("/health", get(health_check));
 
     let schema_routes = Router::new()
         .route("/schemas", get(get_schemas))
@@ -129,6 +113,36 @@ pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
+        .with_state(app_state)
+        .layer(
+            ServiceBuilder::new()
+                .layer(axum_middleware::from_fn(RequestIdLayer::middleware))
+                .layer(TraceLayer::new_for_http().make_span_with(RequestIdMakeSpan))
+                .layer(CorsLayer::permissive()),
+        )
+}
+
+pub fn create_admin_app(app_state: AppState) -> Router {
+    use crate::handlers::{
+        create_api_key, delete_api_key, get_api_key_by_id, get_api_keys, rotate_api_key,
+    };
+
+    let admin_health_check = || async {
+        Json(json!({
+            "status": "healthy",
+            "service": "log-server-admin",
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        }))
+    };
+
+    Router::new()
+        .route("/", get(admin_health_check))
+        .route("/health", get(admin_health_check))
+        .route("/api-keys", post(create_api_key))
+        .route("/api-keys", get(get_api_keys))
+        .route("/api-keys/{key_id}", get(get_api_key_by_id))
+        .route("/api-keys/{key_id}", delete(delete_api_key))
+        .route("/api-keys/{key_id}/rotate", post(rotate_api_key))
         .with_state(app_state)
         .layer(
             ServiceBuilder::new()

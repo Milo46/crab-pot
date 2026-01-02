@@ -1,7 +1,8 @@
 use log_server::repositories::ApiKeyRepository;
 use log_server::services::api_key_service::ApiKeyService;
 use log_server::{
-    create_app, AppState, LogRepository, LogService, SchemaRepository, SchemaService,
+    create_admin_app, create_app, AppState, LogRepository, LogService, SchemaRepository,
+    SchemaService,
 };
 use std::net::SocketAddr;
 use std::{env, sync::Arc};
@@ -48,9 +49,10 @@ async fn main() -> anyhow::Result<()> {
         log_broadcast: log_broadcast_tx,
     };
 
-    let app = create_app(app_state, pool);
+    let app = create_app(app_state.clone(), pool);
+    let admin_app = create_admin_app(app_state.clone());
 
-    tracing::info!("📊 Available endpoints:");
+    tracing::info!("📊 Main API endpoints:");
     tracing::info!("   GET    /                     - Health check");
     tracing::info!("   GET    /health               - Health check");
     tracing::info!("   GET    /ws/logs              - WebSocket for live log updates");
@@ -63,16 +65,52 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("   GET    /logs/schema/:schema_id - Get logs by schema ID");
     tracing::info!("   GET    /logs/:id               - Get log by ID");
     tracing::info!("   DELETE /logs/:id               - Delete log");
+    tracing::info!("");
+    tracing::info!("🔐 Admin API endpoints:");
+    tracing::info!("   GET    /health               - Admin health check");
+    tracing::info!("   POST   /api-keys             - Create new API key");
+    tracing::info!("   GET    /api-keys             - List all API keys");
+    tracing::info!("   GET    /api-keys/:id         - Get API key by ID");
+    tracing::info!("   DELETE /api-keys/:id         - Delete API key");
+    tracing::info!("   POST   /api-keys/:id/rotate  - Rotate API key");
 
-    let addr: SocketAddr = "0.0.0.0:8080".parse()?;
-    tracing::info!("🚀 Log Server running at http://{}", addr);
+    let main_addr: SocketAddr = env::var("MAIN_API_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
+        .parse()?;
 
-    let listener = TcpListener::bind(addr).await?;
-    axum::serve(
-        listener,
+    let admin_addr: SocketAddr = env::var("ADMIN_API_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1:8081".to_string())
+        .parse()?;
+
+    tracing::info!("");
+    tracing::info!("🚀 Main API Server running at http://{}", main_addr);
+    tracing::info!("🔐 Admin API Server running at http://{}", admin_addr);
+    tracing::info!("");
+    tracing::warn!(
+        "⚠️  SECURITY: Admin API is bound to {}. Ensure this is properly secured!",
+        admin_addr
+    );
+    tracing::warn!("⚠️  For production, bind admin API to 127.0.0.1 and use SSH tunnel or VPN.");
+
+    let main_listener = TcpListener::bind(main_addr).await?;
+    let admin_listener = TcpListener::bind(admin_addr).await?;
+
+    let admin_server = tokio::spawn(async move {
+        tracing::info!("Starting Admin API server...");
+        if let Err(e) = axum::serve(admin_listener, admin_app).await {
+            tracing::error!("Admin API server error: {}", e);
+        }
+    });
+
+    tracing::info!("Starting Main API server...");
+    let main_result = axum::serve(
+        main_listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .await?;
+    .await;
 
+    let _ = tokio::join!(admin_server);
+
+    main_result?;
     Ok(())
 }
