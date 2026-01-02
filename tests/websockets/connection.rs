@@ -1,7 +1,6 @@
 use crate::common::{valid_schema_payload, TestContext};
 use futures_util::{SinkExt, StreamExt};
 use log_server::Schema;
-use reqwest::StatusCode;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 #[tokio::test]

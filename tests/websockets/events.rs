@@ -1,5 +1,5 @@
 use crate::common::{valid_log_payload, valid_schema_payload, TestContext};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use log_server::{Log, LogEvent, Schema};
 use serde_json::json;
 use tokio::time::{timeout, Duration};
@@ -283,9 +283,9 @@ async fn multiple_clients_receive_same_events() {
     let ws_url = ctx.base_url.replace("http", "ws");
     let url = format!("{}/ws/logs", ws_url);
 
-    let (mut ws_stream1, _) = connect_async(&url).await.unwrap();
-    let (mut ws_stream2, _) = connect_async(&url).await.unwrap();
-    let (mut ws_stream3, _) = connect_async(&url).await.unwrap();
+    let (ws_stream1, _) = connect_async(&url).await.unwrap();
+    let (ws_stream2, _) = connect_async(&url).await.unwrap();
+    let (ws_stream3, _) = connect_async(&url).await.unwrap();
 
     let log_response = ctx
         .client

@@ -12,8 +12,6 @@ use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-pub use middleware::request_id::{RequestIdLayer, RequestIdMakeSpan};
-
 pub mod dto;
 pub mod error;
 pub mod handlers;
@@ -22,18 +20,21 @@ pub mod models;
 pub mod repositories;
 pub mod services;
 
+use crate::{
+    handlers::{
+        create_log, create_schema, delete_log, delete_schema, get_log_by_id, get_logs_by_name,
+        get_logs_by_name_and_version, get_schema_by_id, get_schema_by_name_and_version,
+        get_schemas, query_logs_by_name, query_logs_by_name_and_version, update_schema, ws_handler,
+    },
+    middleware::api_key_middleware,
+};
+
 pub use dto::{LogEvent, PaginatedLogsResponse, PaginationMetadata, SchemaResponse};
 pub use error::{AppError, AppResult};
-pub use handlers::{
-    create_log, create_schema, delete_log, delete_schema, get_log_by_id, get_logs_by_name,
-    get_logs_by_name_and_version, get_schema_by_id, get_schema_by_name_and_version, get_schemas,
-    query_logs_by_name, query_logs_by_name_and_version, update_schema, ws_handler,
-};
+pub use middleware::request_id::{RequestIdLayer, RequestIdMakeSpan};
 pub use models::{Log, Schema};
-pub use repositories::{LogRepository, SchemaRepository};
-pub use services::{LogService, SchemaService};
-
-use crate::{middleware::api_key_middleware, services::api_key_service::ApiKeyService};
+pub use repositories::{ApiKeyRepository, LogRepository, SchemaRepository};
+pub use services::{ApiKeyService, LogService, SchemaService};
 
 #[derive(Clone)]
 pub struct AppState {

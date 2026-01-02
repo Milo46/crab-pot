@@ -3,9 +3,8 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         Query, State,
     },
-    http::StatusCode,
     response::Response,
-    Extension, Json,
+    Extension,
 };
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::Deserialize;
