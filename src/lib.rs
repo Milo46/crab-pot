@@ -26,6 +26,7 @@ use crate::{
         get_logs_query, get_schema_by_id, get_schema_by_name_and_version, get_schemas,
         log_handlers::{
             get_logs_by_schema_name_and_version, get_logs_by_schema_name_and_version_query,
+            get_logs_by_schema_name_latest, get_logs_by_schema_name_latest_query,
         },
         update_schema, ws_handler,
     },
@@ -95,8 +96,14 @@ pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
         .route("/logs/{id}", delete(delete_log))
         .route("/logs/schemas/{schema_id}", get(get_logs))
         .route("/logs/schemas/{schema_id}", post(get_logs_query))
-        // .route("/logs/by-schema-name/{name}", get(...))
-        // .route("/logs/by-schema-name/{name}", post(...))
+        .route(
+            "/logs/by-schema-name/{name}/latest",
+            get(get_logs_by_schema_name_latest),
+        )
+        .route(
+            "/logs/by-schema-name/{name}/latest",
+            post(get_logs_by_schema_name_latest_query),
+        )
         .route(
             "/logs/by-schema-name/{name}/versions/{version}",
             get(get_logs_by_schema_name_and_version),
