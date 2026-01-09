@@ -4,17 +4,18 @@ use axum::{
     response::IntoResponse,
     Extension, Json,
 };
-use serde_json::{json, Value};
 use uuid::Uuid;
+use validator::Validate;
 
 use crate::{
     dto::{
-        CreateSchemaRequest, DeleteSchemaQuery, GetSchemasQuery, SchemaResponse,
-        UpdateSchemaRequest,
+        schema_dto::SchemasResponse, CreateSchemaRequest, DeleteSchemaQuery, GetSchemasQuery,
+        SchemaResponse, UpdateSchemaRequest,
     },
+    error::WithRequestId,
     middleware::RequestId,
     repositories::schema_repository::SchemaQueryParams,
-    AppError, AppResult, AppState,
+    AppResult, AppState,
 };
 
 /// ## GET /schemas
@@ -36,19 +37,19 @@ pub async fn get_schemas(
     State(state): State<AppState>,
     Query(query): Query<GetSchemasQuery>,
     Extension(request_id): Extension<RequestId>,
-) -> AppResult<Json<Value>> {
-    let repo_params = SchemaQueryParams::from(query);
+) -> AppResult<Json<SchemasResponse>> {
+    let repo_params = SchemaQueryParams {
+        name: query.name,
+        version: query.version,
+    };
 
     let schemas = state
         .schema_service
         .get_all_schemas(Some(repo_params))
         .await
-        .map_err(|e| e.with_request_id(&request_id))?;
+        .with_req_id(&request_id)?;
 
-    let schema_responses: Vec<SchemaResponse> =
-        schemas.into_iter().map(SchemaResponse::from).collect();
-
-    Ok(Json(json!({ "schemas": schema_responses })))
+    Ok(Json(SchemasResponse::from(schemas)))
 }
 
 /// ## GET /schemas/{schema_name}/{schema_version}
@@ -58,18 +59,11 @@ pub async fn get_schema_by_name_and_version(
     Path((schema_name, schema_version)): Path<(String, String)>,
     Extension(request_id): Extension<RequestId>,
 ) -> AppResult<Json<SchemaResponse>> {
-    if schema_name.trim().is_empty() || schema_version.trim().is_empty() {
-        return Err(
-            AppError::bad_request("Schema name or version cannot be empty")
-                .with_request_id(&request_id),
-        );
-    }
-
     let schema = state
         .schema_service
         .get_by_name_and_version(&schema_name, &schema_version)
         .await
-        .map_err(|e| e.with_request_id(&request_id))?;
+        .with_req_id(&request_id)?;
 
     Ok(Json(SchemaResponse::from(schema)))
 }
@@ -81,15 +75,11 @@ pub async fn get_schema_by_id(
     Path(id): Path<Uuid>,
     Extension(request_id): Extension<RequestId>,
 ) -> AppResult<Json<SchemaResponse>> {
-    if id.is_nil() {
-        return Err(AppError::bad_request("Schema ID cannot be empty").with_request_id(&request_id));
-    }
-
     let schema = state
         .schema_service
         .get_schema_by_id(id)
         .await
-        .map_err(|e| e.with_request_id(&request_id))?;
+        .with_req_id(&request_id)?;
 
     Ok(Json(SchemaResponse::from(schema)))
 }
@@ -101,17 +91,9 @@ pub async fn create_schema(
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<CreateSchemaRequest>,
 ) -> AppResult<impl IntoResponse> {
-    if payload.name.trim().is_empty() {
-        return Err(
-            AppError::bad_request("Schema name cannot be empty").with_request_id(&request_id)
-        );
-    }
-
-    if payload.version.trim().is_empty() {
-        return Err(
-            AppError::bad_request("Schema version cannot be empty").with_request_id(&request_id)
-        );
-    }
+    payload
+        .validate()
+        .map_err(|e| crate::AppError::validation_error(format!("Validation failed: {}", e)))?;
 
     let schema = state
         .schema_service
@@ -122,7 +104,7 @@ pub async fn create_schema(
             payload.schema_definition,
         )
         .await
-        .map_err(|e| e.with_request_id(&request_id))?;
+        .with_req_id(&request_id)?;
 
     let schema_id = schema.id;
     let mut headers = HeaderMap::new();
@@ -146,15 +128,9 @@ pub async fn update_schema(
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<UpdateSchemaRequest>,
 ) -> AppResult<Json<SchemaResponse>> {
-    if id.is_nil() {
-        return Err(AppError::bad_request("Schema ID cannot be empty").with_request_id(&request_id));
-    }
-
-    if payload.name.trim().is_empty() {
-        return Err(
-            AppError::bad_request("Schema name cannot be empty").with_request_id(&request_id)
-        );
-    }
+    payload
+        .validate()
+        .map_err(|e| crate::AppError::validation_error(format!("Validation failed: {}", e)))?;
 
     let schema = state
         .schema_service
@@ -166,7 +142,7 @@ pub async fn update_schema(
             payload.schema_definition,
         )
         .await
-        .map_err(|e| e.with_request_id(&request_id))?;
+        .with_req_id(&request_id)?;
 
     Ok(Json(SchemaResponse::from(schema)))
 }
@@ -179,24 +155,13 @@ pub async fn delete_schema(
     Query(params): Query<DeleteSchemaQuery>,
     Extension(request_id): Extension<RequestId>,
 ) -> AppResult<StatusCode> {
-    if id.is_nil() {
-        return Err(AppError::bad_request("Schema ID cannot be empty").with_request_id(&request_id));
-    }
-
     let force = params.force.unwrap_or(false);
 
-    let deleted = state
+    state
         .schema_service
         .delete_schema(id, force)
         .await
-        .map_err(|e| e.with_request_id(&request_id))?;
+        .with_req_id(&request_id)?;
 
-    if deleted {
-        Ok(StatusCode::NO_CONTENT)
-    } else {
-        Err(
-            AppError::not_found(format!("Schema with id '{}' not found", id))
-                .with_request_id(&request_id),
-        )
-    }
+    Ok(StatusCode::NO_CONTENT)
 }

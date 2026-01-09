@@ -1,26 +1,31 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
+use validator::Validate;
 
-use crate::{repositories::schema_repository::SchemaQueryParams, Schema};
+use crate::Schema;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct CreateSchemaRequest {
+    #[validate(length(min = 1, message = "Schema name cannot be empty"))]
     pub name: String,
+    #[validate(length(min = 1, message = "Schema version cannot be empty"))]
     pub version: String,
     pub description: Option<String>,
     pub schema_definition: Value,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct UpdateSchemaRequest {
+    #[validate(length(min = 1, message = "Schema name cannot be empty"))]
     pub name: String,
+    #[validate(length(min = 1, message = "Schema version cannot be empty"))]
     pub version: String,
     pub description: Option<String>,
     pub schema_definition: Value,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SchemaResponse {
     pub id: Uuid,
     pub name: String,
@@ -45,19 +50,23 @@ impl From<Schema> for SchemaResponse {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchemasResponse {
+    pub schemas: Vec<SchemaResponse>,
+}
+
+impl From<Vec<Schema>> for SchemasResponse {
+    fn from(value: Vec<Schema>) -> Self {
+        Self {
+            schemas: value.into_iter().map(SchemaResponse::from).collect(),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct GetSchemasQuery {
     pub name: Option<String>,
     pub version: Option<String>,
-}
-
-impl From<GetSchemasQuery> for SchemaQueryParams {
-    fn from(query: GetSchemasQuery) -> Self {
-        SchemaQueryParams {
-            name: query.name,
-            version: query.version,
-        }
-    }
 }
 
 #[derive(Debug, Deserialize)]

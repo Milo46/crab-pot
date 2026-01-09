@@ -22,9 +22,12 @@ pub mod services;
 
 use crate::{
     handlers::{
-        create_log, create_schema, delete_log, delete_schema, get_log_by_id, get_logs_by_name,
-        get_logs_by_name_and_version, get_schema_by_id, get_schema_by_name_and_version,
-        get_schemas, query_logs_by_name, query_logs_by_name_and_version, update_schema, ws_handler,
+        create_log, create_schema, delete_log, delete_schema, get_log_by_id, get_logs,
+        get_logs_query, get_schema_by_id, get_schema_by_name_and_version, get_schemas,
+        log_handlers::{
+            get_logs_by_schema_name_and_version, get_logs_by_schema_name_and_version_query,
+        },
+        update_schema, ws_handler,
     },
     middleware::api_key_middleware,
 };
@@ -32,7 +35,7 @@ use crate::{
 pub use dto::{LogEvent, PaginatedLogsResponse, PaginationMetadata, SchemaResponse};
 pub use error::{AppError, AppResult};
 pub use middleware::request_id::{RequestIdLayer, RequestIdMakeSpan};
-pub use models::{Log, Schema};
+pub use models::{Log, QueryParams, Schema, SchemaNameVersion};
 pub use repositories::{ApiKeyRepository, LogRepository, SchemaRepository};
 pub use services::{ApiKeyService, LogService, SchemaService};
 
@@ -81,24 +84,27 @@ pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
         .route("/schemas/{id}", put(update_schema))
         .route("/schemas/{id}", delete(delete_schema))
         .route(
-            "/schemas/{schema_name}/version/{schema_version}",
+            "/schemas/by-name/{schema_name}/versions/{schema_version}",
             get(get_schema_by_name_and_version),
         );
 
     let log_routes = Router::new()
         .route("/logs", post(create_log))
-        .route("/logs/schema/{schema_name}", get(get_logs_by_name))
-        .route("/logs/schema/{schema_name}/query", post(query_logs_by_name))
-        .route(
-            "/logs/schema/{schema_name}/versions/{schema_version}",
-            get(get_logs_by_name_and_version),
-        )
-        .route(
-            "/logs/schema/{schema_name}/versions/{schema_version}/query",
-            post(query_logs_by_name_and_version),
-        )
+        // .route("/logs/bulk", post(create_logs_bulk))
         .route("/logs/{id}", get(get_log_by_id))
-        .route("/logs/{id}", delete(delete_log));
+        .route("/logs/{id}", delete(delete_log))
+        .route("/logs/schemas/{schema_id}", get(get_logs))
+        .route("/logs/schemas/{schema_id}", post(get_logs_query))
+        // .route("/logs/by-schema-name/{name}", get(...))
+        // .route("/logs/by-schema-name/{name}", post(...))
+        .route(
+            "/logs/by-schema-name/{name}/versions/{version}",
+            get(get_logs_by_schema_name_and_version),
+        )
+        .route(
+            "/logs/by-schema-name/{name}/versions/{version}",
+            post(get_logs_by_schema_name_and_version_query),
+        );
 
     let ws_routes = Router::new().route("/ws/logs", get(ws_handler));
 

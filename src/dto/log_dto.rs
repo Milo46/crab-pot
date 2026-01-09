@@ -2,12 +2,35 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
+use validator::Validate;
 
-use crate::Log;
+use crate::{Log, QueryParams};
 
-#[derive(Debug, Deserialize)]
+fn validate_uuid_not_nil(uuid: &Uuid) -> Result<(), validator::ValidationError> {
+    if uuid.is_nil() {
+        return Err(validator::ValidationError::new("uuid_nil"));
+    }
+    Ok(())
+}
+
+fn validate_log_data_is_object(value: &Value) -> Result<(), validator::ValidationError> {
+    if !value.is_object() {
+        return Err(validator::ValidationError::new("log_data_must_be_object"));
+    }
+    Ok(())
+}
+
+#[derive(Debug, Deserialize, Validate)]
 pub struct CreateLogRequest {
+    #[validate(custom(
+        function = "validate_uuid_not_nil",
+        message = "Schema ID cannot be nil"
+    ))]
     pub schema_id: Uuid,
+    #[validate(custom(
+        function = "validate_log_data_is_object",
+        message = "Log data must be a JSON object"
+    ))]
     pub log_data: Value,
 }
 
@@ -57,15 +80,6 @@ pub struct QueryLogsRequest {
     #[serde(default = "default_page")]
     pub page: i32,
     #[serde(default = "default_limit")]
-    pub limit: i32,
-    pub date_begin: Option<DateTime<Utc>>,
-    pub date_end: Option<DateTime<Utc>>,
-    pub filters: Option<Value>,
-}
-
-#[derive(Debug, Clone)]
-pub struct QueryParams {
-    pub page: i32,
     pub limit: i32,
     pub date_begin: Option<DateTime<Utc>>,
     pub date_end: Option<DateTime<Utc>>,

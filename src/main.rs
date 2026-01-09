@@ -51,26 +51,20 @@ async fn main() -> anyhow::Result<()> {
     let admin_app = create_admin_app(app_state.clone());
 
     tracing::info!("📊 Main API endpoints:");
-    tracing::info!("   GET    /                     - Health check");
-    tracing::info!("   GET    /health               - Health check");
-    tracing::info!("   GET    /ws/logs              - WebSocket for live log updates");
-    tracing::info!("   GET    /schemas              - Get all schemas");
-    tracing::info!("   POST   /schemas              - Create new schema");
-    tracing::info!("   GET    /schemas/:id          - Get schema by ID");
-    tracing::info!("   PUT    /schemas/:id          - Update schema");
-    tracing::info!("   DELETE /schemas/:id          - Delete schema");
-    tracing::info!("   POST   /logs                      - Create new log entry");
-    tracing::info!("   GET    /logs/schema/:schema_id - Get logs by schema ID");
-    tracing::info!("   GET    /logs/:id               - Get log by ID");
-    tracing::info!("   DELETE /logs/:id               - Delete log");
-    tracing::info!("");
-    tracing::info!("🔐 Admin API endpoints:");
-    tracing::info!("   GET    /health               - Admin health check");
-    tracing::info!("   POST   /api-keys             - Create new API key");
-    tracing::info!("   GET    /api-keys             - List all API keys");
-    tracing::info!("   GET    /api-keys/:id         - Get API key by ID");
-    tracing::info!("   DELETE /api-keys/:id         - Delete API key");
-    tracing::info!("   POST   /api-keys/:id/rotate  - Rotate API key");
+
+    tracing::info!("Schemas:");
+    tracing::info!("  GET               /");
+    tracing::info!("  GET               /health");
+    tracing::info!("  GET, POST         /schemas");
+    tracing::info!("  GET, PUT, DELETE  /schemas/{{id}}");
+    tracing::info!("  GET               /schemas/by-name/{{name}}/versions/{{version}}");
+    tracing::info!("Logs:");
+    tracing::info!("  POST         /logs");
+    tracing::info!("  GET, DELETE  /logs/{{id}}");
+    tracing::info!("  GET, POST    /logs/schemas/{{schema_id}}");
+    tracing::info!("  GET, POST    /logs/by-schema-name/{{name}}/versions/{{version}}");
+    tracing::info!("WebSocket:");
+    tracing::info!("  GET  /ws/logs");
 
     let main_addr: SocketAddr = env::var("MAIN_API_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:8080".to_string())

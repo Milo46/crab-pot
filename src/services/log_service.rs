@@ -1,8 +1,8 @@
 use crate::dto::log_dto::{
-    LogResponse, PaginatedLogsResponse, PaginationMetadata, QueryParams, TimeWindowMetadata,
+    LogResponse, PaginatedLogsResponse, PaginationMetadata, TimeWindowMetadata,
 };
 use crate::error::AppResult;
-use crate::models::Log;
+use crate::models::{Log, QueryParams};
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
 use crate::AppError;
 use chrono::Utc;
@@ -40,6 +40,14 @@ impl LogService {
     }
 
     pub async fn create_log(&self, schema_id: Uuid, log_data: Value) -> AppResult<Log> {
+        if schema_id.is_nil() {
+            return Err(AppError::bad_request("Schema ID cannot be empty"));
+        }
+
+        if !log_data.is_object() {
+            return Err(AppError::bad_request("Log data must be a JSON object"));
+        }
+
         let log = Log {
             id: 0, // This will be set by the database
             schema_id,
@@ -53,7 +61,7 @@ impl LogService {
             .map_err(|e| e.context(format!("Failed to create log for schema {}", schema_id)))
     }
 
-    pub async fn delete_log(&self, id: i32) -> AppResult<bool> {
+    pub async fn delete_log(&self, id: i32) -> AppResult<Log> {
         self.log_repository
             .delete(id)
             .await
@@ -81,6 +89,10 @@ impl LogService {
         schema_id: Uuid,
         query_params: QueryParams,
     ) -> AppResult<PaginatedLogsResponse> {
+        if schema_id.is_nil() {
+            return Err(AppError::bad_request("Schema ID cannot be nil"));
+        }
+
         let logs = self
             .log_repository
             .get_by_schema_id(schema_id, query_params.clone())

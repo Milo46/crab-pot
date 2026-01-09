@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::models::Schema;
+use crate::models::{Schema, SchemaNameVersion};
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
 use crate::repositories::schema_repository::{
     SchemaQueryParams, SchemaRepository, SchemaRepositoryTrait,
@@ -8,32 +8,6 @@ use chrono::Utc;
 use serde_json::Value;
 use std::sync::Arc;
 use uuid::Uuid;
-
-#[derive(Debug, Clone)]
-pub struct SchemaNameVersion {
-    pub name: String,
-    pub version: Option<String>,
-}
-
-impl SchemaNameVersion {
-    pub fn new(name: String, version: Option<String>) -> Self {
-        Self { name, version }
-    }
-
-    pub fn with_version(name: String, version: String) -> Self {
-        Self {
-            name,
-            version: Some(version),
-        }
-    }
-
-    pub fn latest(name: String) -> Self {
-        Self {
-            name,
-            version: None,
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct SchemaService {
@@ -252,7 +226,10 @@ impl SchemaService {
             .map_err(|e| e.context(format!("Failed to fetch schema {}", id)))?;
 
         if schema.is_none() {
-            return Ok(false);
+            return Err(AppError::not_found(format!(
+                "Schema with id '{}' not found",
+                id
+            )));
         }
 
         let log_count = self

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::types::ipnetwork::IpNetwork;
+use validator::Validate;
 
 use crate::models::{api_key_model::CreatedApiKey, ApiKey};
 
@@ -48,8 +49,9 @@ impl From<Vec<ApiKey>> for ApiKeysResponse {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Validate)]
 pub struct CreateApiKeyRequest {
+    #[validate(length(min = 1, message = "API key name cannot be empty"))]
     pub name: String,
     pub description: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,

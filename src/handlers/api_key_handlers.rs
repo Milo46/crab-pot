@@ -3,6 +3,7 @@ use axum::{
     http::StatusCode,
     Extension, Json,
 };
+use validator::Validate;
 
 use crate::{
     dto::api_key_dto::{
@@ -19,12 +20,10 @@ pub async fn create_api_key(
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<CreateApiKeyRequest>,
 ) -> AppResult<Json<CreateApiKeyResponse>> {
-    if payload.name.trim().is_empty() {
-        return Err(
-            AppError::validation_error("API key name cannot be empty".to_string())
-                .with_request_id(&request_id),
-        );
-    }
+    // Validate at the boundary
+    payload
+        .validate()
+        .map_err(|e| AppError::validation_error(format!("Validation failed: {}", e)))?;
 
     let created_api_key = state
         .api_key_service

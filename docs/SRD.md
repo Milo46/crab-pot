@@ -1,4 +1,4 @@
-# Log Server SRD (Software Requirements Document) - v1.0.0
+# Log Server SRD (Software Requirements Document) - v0.9.0
 
 # Table of Contents
 
@@ -1197,10 +1197,11 @@ curl http://localhost:8081/api-keys
 
 ## 10. Version Information
 
-* **Current Version**: 1.2.0
+* **Current Version**: 0.9.0 (Pre-release)
 * **API Version**: v1
 * **Database Schema Version**: 1.1 (includes api_keys table)
 * **Release Date**: January 2026
+* **Status**: Development/Testing phase (not yet production-ready)
 * **Compatibility**:
   * Rust 1.82+ (2021 edition)
   * PostgreSQL 16+

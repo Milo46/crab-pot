@@ -4,9 +4,9 @@ use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::dto::log_dto::QueryParams;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::models::Log;
+use crate::QueryParams;
 
 #[async_trait]
 pub trait LogRepositoryTrait {
@@ -17,7 +17,7 @@ pub trait LogRepositoryTrait {
     ) -> AppResult<Vec<Log>>;
     async fn get_by_id(&self, id: i32) -> AppResult<Option<Log>>;
     async fn create(&self, log: &Log) -> AppResult<Log>;
-    async fn delete(&self, id: i32) -> AppResult<bool>;
+    async fn delete(&self, id: i32) -> AppResult<Log>;
     async fn count_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64>;
     async fn count_by_schema_id_with_filters(
         &self,
@@ -166,13 +166,16 @@ impl LogRepositoryTrait for LogRepository {
         Ok(created_log)
     }
 
-    async fn delete(&self, id: i32) -> AppResult<bool> {
-        let result = sqlx::query("DELETE FROM logs WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+    async fn delete(&self, id: i32) -> AppResult<Log> {
+        let deleted_log = sqlx::query_as::<_, Log>(
+            "DELETE FROM logs WHERE id = $1 RETURNING id, schema_id, log_data, created_at",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("Log with id '{}' not found", id)))?;
 
-        Ok(result.rows_affected() > 0)
+        Ok(deleted_log)
     }
 
     async fn count_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64> {

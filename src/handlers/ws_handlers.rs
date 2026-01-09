@@ -10,7 +10,7 @@ use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::AppResult;
+use crate::{error::WithRequestId, AppResult};
 use crate::{middleware::RequestId, AppState};
 
 #[derive(Debug, Deserialize)]
@@ -29,7 +29,7 @@ pub async fn ws_handler(
             .schema_service
             .get_schema_by_id(schema_id)
             .await
-            .map_err(|e| e.with_request_id(&request_id));
+            .with_req_id(&request_id)?;
 
         tracing::debug!(
             "WebSocket connection requested for schema_id: {}",
