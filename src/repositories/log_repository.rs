@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::models::Log;
+use crate::repositories::query_builder::LogQueryBuilder;
 use crate::QueryParams;
 
 #[async_trait]
@@ -18,13 +19,7 @@ pub trait LogRepositoryTrait {
     async fn get_by_id(&self, id: i32) -> AppResult<Option<Log>>;
     async fn create(&self, log: &Log) -> AppResult<Log>;
     async fn delete(&self, id: i32) -> AppResult<Log>;
-    async fn count_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64>;
-    async fn count_by_schema_id_with_filters(
-        &self,
-        schema_id: Uuid,
-        filters: Option<Value>,
-    ) -> AppResult<i64>;
-    async fn count_by_schema_id_with_filters_and_dates(
+    async fn count_by_schema_id(
         &self,
         schema_id: Uuid,
         filters: Option<Value>,
@@ -32,6 +27,15 @@ pub trait LogRepositoryTrait {
         date_end: Option<DateTime<Utc>>,
     ) -> AppResult<i64>;
     async fn delete_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64>;
+
+    async fn get_by_schema_id_with_cursor(
+        &self,
+        schema_id: Uuid,
+        cursor: i32,
+        limit: i32,
+    ) -> AppResult<Vec<Log>>;
+    
+    async fn get_latest_log_id(&self, schema_id: Uuid) -> AppResult<Option<i32>>;
 }
 
 #[derive(Clone)]
@@ -47,94 +51,53 @@ impl LogRepository {
 
 #[async_trait]
 impl LogRepositoryTrait for LogRepository {
+    async fn get_by_schema_id_with_cursor(
+        &self,
+        schema_id: Uuid,
+        cursor: i32,
+        limit: i32,
+    ) -> AppResult<Vec<Log>> {
+        let fetch_limit = limit + 1;
+        
+        let logs = sqlx::query_as::<_, Log>(
+            r#"
+            SELECT * FROM logs
+            WHERE schema_id = $1 AND id < $2
+            ORDER BY id DESC
+            LIMIT $3
+            "#,
+        )
+        .bind(schema_id)
+        .bind(cursor)
+        .bind(fetch_limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(logs)
+    }
+
     async fn get_by_schema_id(
         &self,
         schema_id: Uuid,
         query_params: QueryParams,
     ) -> AppResult<Vec<Log>> {
-        let offset = (query_params.page - 1) * query_params.limit;
-        let has_filters = query_params
-            .filters
-            .as_ref()
-            .and_then(|f| f.as_object())
-            .is_some();
-        let has_dates = query_params.date_begin.is_some() && query_params.date_end.is_some();
-
-        let logs = match (has_filters, has_dates) {
-            (true, true) => {
-                sqlx::query_as::<_, Log>(
-                    r#"
-                    SELECT * FROM logs
-                    WHERE schema_id = $1 AND log_data @> $2 AND created_at BETWEEN $3 AND $4
-                    ORDER BY created_at DESC
-                    LIMIT $5 OFFSET $6
-                    "#,
-                )
-                .bind(schema_id)
-                .bind(&query_params.filters)
-                .bind(query_params.date_begin)
-                .bind(query_params.date_end)
-                .bind(query_params.limit)
-                .bind(offset)
-                .fetch_all(&self.pool)
-                .await?
-            }
-            (true, false) => {
-                sqlx::query_as::<_, Log>(
-                    r#"
-                    SELECT * FROM logs
-                    WHERE schema_id = $1 AND log_data @> $2
-                    ORDER BY created_at DESC
-                    LIMIT $3 OFFSET $4
-                    "#,
-                )
-                .bind(schema_id)
-                .bind(&query_params.filters)
-                .bind(query_params.limit)
-                .bind(offset)
-                .fetch_all(&self.pool)
-                .await?
-            }
-            (false, true) => {
-                sqlx::query_as::<_, Log>(
-                    r#"
-                    SELECT * FROM logs
-                    WHERE schema_id = $1 AND created_at BETWEEN $2 AND $3
-                    ORDER BY created_at DESC
-                    LIMIT $4 OFFSET $5
-                    "#,
-                )
-                .bind(schema_id)
-                .bind(query_params.date_begin)
-                .bind(query_params.date_end)
-                .bind(query_params.limit)
-                .bind(offset)
-                .fetch_all(&self.pool)
-                .await?
-            }
-            (false, false) => {
-                sqlx::query_as::<_, Log>(
-                    r#"
-                    SELECT * FROM logs
-                    WHERE schema_id = $1
-                    ORDER BY created_at DESC
-                    LIMIT $2 OFFSET $3
-                    "#,
-                )
-                .bind(schema_id)
-                .bind(query_params.limit)
-                .bind(offset)
-                .fetch_all(&self.pool)
-                .await?
-            }
-        };
+        let logs = LogQueryBuilder::select()
+            .schema_id(schema_id)
+            .filters(query_params.filters.as_ref())
+            .date_range(query_params.date_begin, query_params.date_end)
+            .order_by("created_at", "DESC")
+            .paginate(query_params.page, query_params.limit)
+            .build()
+            .build_query_as::<Log>()
+            .fetch_all(&self.pool)
+            .await?;
 
         tracing::debug!(
             "Fetched {} logs for schema_id={} (filters: {}, dates: {})",
             logs.len(),
             schema_id,
-            has_filters,
-            has_dates
+            query_params.filters.is_some(),
+            query_params.date_begin.is_some() && query_params.date_end.is_some()
         );
 
         Ok(logs)
@@ -178,109 +141,23 @@ impl LogRepositoryTrait for LogRepository {
         Ok(deleted_log)
     }
 
-    async fn count_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64> {
-        let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM logs WHERE schema_id = $1")
-            .bind(schema_id)
-            .fetch_one(&self.pool)
-            .await?;
-
-        Ok(count)
-    }
-
-    async fn count_by_schema_id_with_filters(
-        &self,
-        schema_id: Uuid,
-        filters: Option<Value>,
-    ) -> AppResult<i64> {
-        if let Some(filter_obj) = &filters {
-            if filter_obj.as_object().is_some() {
-                let count = sqlx::query_scalar::<_, i64>(
-                    "SELECT COUNT(*) FROM logs WHERE schema_id = $1 AND log_data @> $2",
-                )
-                .bind(schema_id)
-                .bind(filter_obj)
-                .fetch_one(&self.pool)
-                .await?;
-
-                return Ok(count);
-            }
-        }
-
-        self.count_by_schema_id(schema_id).await
-    }
-
-    async fn count_by_schema_id_with_filters_and_dates(
+    async fn count_by_schema_id(
         &self,
         schema_id: Uuid,
         filters: Option<Value>,
         date_begin: Option<DateTime<Utc>>,
         date_end: Option<DateTime<Utc>>,
     ) -> AppResult<i64> {
-        match (date_begin, date_end) {
-            (Some(begin), Some(end)) => {
-                // Both dates provided
-                if let Some(filter_obj) = &filters {
-                    if filter_obj.as_object().is_some() {
-                        let count = sqlx::query_scalar::<_, i64>(
-                            r#"
-                            SELECT COUNT(*) FROM logs
-                            WHERE
-                                schema_id = $1 AND
-                                log_data @> $2 AND
-                                created_at BETWEEN $3 AND $4
-                            "#,
-                        )
-                        .bind(schema_id)
-                        .bind(filter_obj)
-                        .bind(begin)
-                        .bind(end)
-                        .fetch_one(&self.pool)
-                        .await?;
+        let count: i64 = LogQueryBuilder::count()
+            .schema_id(schema_id)
+            .filters(filters.as_ref())
+            .date_range(date_begin, date_end)
+            .build()
+            .build_query_scalar()
+            .fetch_one(&self.pool)
+            .await?;
 
-                        return Ok(count);
-                    }
-                }
-
-                let count = sqlx::query_scalar::<_, i64>(
-                    r#"
-                    SELECT COUNT(*) FROM logs
-                    WHERE
-                        schema_id = $1 AND
-                        created_at BETWEEN $2 AND $3
-                    "#,
-                )
-                .bind(schema_id)
-                .bind(begin)
-                .bind(end)
-                .fetch_one(&self.pool)
-                .await?;
-
-                Ok(count)
-            }
-            _ => {
-                // Dates not provided or only one provided - count without date filtering
-                if let Some(filter_obj) = &filters {
-                    if filter_obj.as_object().is_some() {
-                        let count = sqlx::query_scalar::<_, i64>(
-                            r#"
-                            SELECT COUNT(*) FROM logs
-                            WHERE
-                                schema_id = $1 AND
-                                log_data @> $2
-                            "#,
-                        )
-                        .bind(schema_id)
-                        .bind(filter_obj)
-                        .fetch_one(&self.pool)
-                        .await?;
-
-                        return Ok(count);
-                    }
-                }
-
-                self.count_by_schema_id(schema_id).await
-            }
-        }
+        Ok(count)
     }
 
     async fn delete_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64> {
@@ -290,5 +167,21 @@ impl LogRepositoryTrait for LogRepository {
             .await?;
 
         Ok(result.rows_affected() as i64)
+    }
+    
+    async fn get_latest_log_id(&self, schema_id: Uuid) -> AppResult<Option<i32>> {
+        let result = sqlx::query_scalar::<_, i32>(
+            r#"
+            SELECT id FROM logs
+            WHERE schema_id = $1
+            ORDER BY id DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(schema_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(result)
     }
 }

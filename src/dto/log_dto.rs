@@ -50,6 +50,7 @@ pub struct TimeWindowMetadata {
 
 #[derive(Debug, Serialize)]
 pub struct PaginatedLogsResponse {
+    pub schema_id: Uuid,
     pub logs: Vec<LogResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timewindow: Option<TimeWindowMetadata>,
@@ -57,9 +58,32 @@ pub struct PaginatedLogsResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct CursorMetadata {
+    pub limit: i32,
+    pub next_cursor: Option<i32>,
+    /// Cursor for fetching the previous page (toward newer logs).
+    /// Currently not supported - always None.
+    pub prev_cursor: Option<i32>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CursorLogsResponse {
+    pub schema_id: Uuid,
+    pub logs: Vec<LogResponse>,
+    pub cursor: CursorMetadata,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum LogsResponse {
+    Paginated(PaginatedLogsResponse),
+    Cursor(CursorLogsResponse),
+}
+
+#[derive(Debug, Serialize)]
 pub struct LogResponse {
     pub id: i32,
-    pub schema_id: Uuid,
     pub log_data: Value,
     pub created_at: String,
 }
@@ -68,7 +92,6 @@ impl From<Log> for LogResponse {
     fn from(log: Log) -> Self {
         LogResponse {
             id: log.id,
-            schema_id: log.schema_id,
             log_data: log.log_data,
             created_at: log.created_at.to_rfc3339(),
         }
@@ -81,6 +104,9 @@ pub struct QueryLogsRequest {
     pub page: i32,
     #[serde(default = "default_limit")]
     pub limit: i32,
+    
+    pub cursor: Option<i32>,
+    
     pub date_begin: Option<DateTime<Utc>>,
     pub date_end: Option<DateTime<Utc>>,
     pub filters: Option<Value>,

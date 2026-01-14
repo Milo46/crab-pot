@@ -7,8 +7,8 @@ pub use schema_dto::{
 };
 
 pub use log_dto::{
-    CreateLogRequest, LogEvent, LogResponse, PaginatedLogsResponse, PaginationMetadata,
-    QueryLogsRequest, TimeWindowMetadata,
+    CreateLogRequest, CursorLogsResponse, CursorMetadata, LogEvent, LogResponse, LogsResponse,
+    PaginatedLogsResponse, PaginationMetadata, QueryLogsRequest, TimeWindowMetadata,
 };
 
 pub use api_key_dto::{ApiKeyResponse, ApiKeysResponse, CreateApiKeyRequest, CreateApiKeyResponse};

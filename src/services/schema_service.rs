@@ -234,7 +234,7 @@ impl SchemaService {
 
         let log_count = self
             .log_repository
-            .count_by_schema_id(id)
+            .count_by_schema_id(id, None, None, None)
             .await
             .map_err(|e| e.context(format!("Failed to count logs for schema {}", id)))?;
 

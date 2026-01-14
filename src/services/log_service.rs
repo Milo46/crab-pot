@@ -1,5 +1,6 @@
 use crate::dto::log_dto::{
-    LogResponse, PaginatedLogsResponse, PaginationMetadata, TimeWindowMetadata,
+    CursorLogsResponse, CursorMetadata, LogResponse, PaginatedLogsResponse, PaginationMetadata,
+    TimeWindowMetadata,
 };
 use crate::error::AppResult;
 use crate::models::{Log, QueryParams};
@@ -74,7 +75,7 @@ impl LogService {
         query_params: &QueryParams,
     ) -> AppResult<i64> {
         self.log_repository
-            .count_by_schema_id_with_filters_and_dates(
+            .count_by_schema_id(
                 schema_id,
                 query_params.filters.clone(),
                 query_params.date_begin,
@@ -106,7 +107,7 @@ impl LogService {
 
         let total = self
             .log_repository
-            .count_by_schema_id_with_filters_and_dates(
+            .count_by_schema_id(
                 schema_id,
                 query_params.filters.clone(),
                 query_params.date_begin,
@@ -133,6 +134,7 @@ impl LogService {
         };
 
         Ok(PaginatedLogsResponse {
+            schema_id,
             logs: log_responses,
             timewindow,
             pagination: PaginationMetadata {
@@ -142,5 +144,75 @@ impl LogService {
                 total_pages,
             },
         })
+    }
+
+    pub async fn get_cursor_logs(
+        &self,
+        schema_id: Uuid,
+        cursor: i32,
+        limit: i32,
+    ) -> AppResult<CursorLogsResponse> {
+        if schema_id.is_nil() {
+            return Err(AppError::bad_request("Schema ID cannot be nil"));
+        }
+
+        if limit <= 0 {
+            return Err(AppError::bad_request("Limit must be greater than 0"));
+        }
+
+        let mut logs = self
+            .log_repository
+            .get_by_schema_id_with_cursor(schema_id, cursor, limit)
+            .await
+            .map_err(|e| {
+                e.context(format!(
+                    "Failed to get logs with cursor feature for schema {}",
+                    schema_id
+                ))
+            })?;
+        
+        let has_more = logs.len() > limit as usize;
+        
+        if has_more {
+            logs.pop();
+        }
+        
+        let next_cursor = if has_more {
+            logs.last().map(|log| log.id)
+        } else {
+            None
+        };
+        
+        // For backward pagination (toward newer logs):
+        // prev_cursor would be first_id + 1, but we don't support
+        // bidirectional pagination yet. Setting to None for clarity.
+        let prev_cursor = None;
+        
+        let logs_response: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
+
+        Ok(CursorLogsResponse {
+            schema_id,
+            logs: logs_response,
+            cursor: CursorMetadata {
+                limit,
+                next_cursor,
+                prev_cursor,
+                has_more,
+            }
+        })
+    }
+
+    pub async fn get_initial_cursor(&self, schema_id: Uuid) -> AppResult<i32> {
+        if schema_id.is_nil() {
+            return Err(AppError::bad_request("Schema ID cannot be nil"));
+        }
+
+        let latest_id = self
+            .log_repository
+            .get_latest_log_id(schema_id)
+            .await
+            .map_err(|e| e.context(format!("Failed to get latest log ID for schema {}", schema_id)))?;
+
+        Ok(latest_id.map(|id| id + 1).unwrap_or(i32::MAX))
     }
 }

@@ -22,8 +22,8 @@ pub mod services;
 
 use crate::{
     handlers::{
-        create_log, create_schema, delete_log, delete_schema, get_log_by_id, get_logs,
-        get_logs_query, get_schema_by_id, get_schema_by_name_and_version, get_schemas,
+        create_log, create_schema, delete_log, delete_schema, get_initial_cursor, get_log_by_id,
+        get_logs, get_logs_query, get_schema_by_id, get_schema_by_name_and_version, get_schemas,
         log_handlers::{
             get_logs_by_schema_name_and_version, get_logs_by_schema_name_and_version_query,
             get_logs_by_schema_name_latest, get_logs_by_schema_name_latest_query,
@@ -96,6 +96,7 @@ pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
         .route("/logs/{id}", delete(delete_log))
         .route("/logs/schemas/{schema_id}", get(get_logs))
         .route("/logs/schemas/{schema_id}", post(get_logs_query))
+        .route("/logs/schemas/{schema_id}/cursor/initial", get(get_initial_cursor))
         .route(
             "/logs/by-schema-name/{name}/latest",
             get(get_logs_by_schema_name_latest),

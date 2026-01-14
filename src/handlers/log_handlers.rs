@@ -7,7 +7,7 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    dto::{CreateLogRequest, LogEvent, LogResponse, PaginatedLogsResponse, QueryLogsRequest},
+    dto::{CreateLogRequest, LogEvent, LogResponse, LogsResponse, QueryLogsRequest},
     error::WithRequestId,
     middleware::RequestId,
     AppResult, AppState, QueryParams, SchemaNameVersion,
@@ -70,17 +70,27 @@ pub async fn delete_log(
 async fn get_logs_internal(
     state: AppState,
     schema_id: Uuid,
-    params: impl Into<QueryParams>,
+    params: QueryLogsRequest,
     request_id: RequestId,
-) -> AppResult<Json<PaginatedLogsResponse>> {
-    let query = params.into();
-    let response = state
-        .log_service
-        .get_paginated_logs(schema_id, query)
-        .await
-        .with_req_id(&request_id)?;
+) -> AppResult<Json<LogsResponse>> {
+    if let Some(cursor) = params.cursor {
+        let response = state
+            .log_service
+            .get_cursor_logs(schema_id, cursor, params.limit)
+            .await
+            .with_req_id(&request_id)?;
+        
+        Ok(Json(LogsResponse::Cursor(response)))
+    } else {
+        let query: QueryParams = params.into();
+        let response = state
+            .log_service
+            .get_paginated_logs(schema_id, query)
+            .await
+            .with_req_id(&request_id)?;
 
-    Ok(Json(response))
+        Ok(Json(LogsResponse::Paginated(response)))
+    }
 }
 
 pub async fn get_logs(
@@ -88,7 +98,7 @@ pub async fn get_logs(
     Path(schema_id): Path<Uuid>,
     Query(params): Query<QueryLogsRequest>,
     Extension(request_id): Extension<RequestId>,
-) -> AppResult<Json<PaginatedLogsResponse>> {
+) -> AppResult<Json<LogsResponse>> {
     get_logs_internal(state, schema_id, params, request_id).await
 }
 
@@ -97,16 +107,16 @@ pub async fn get_logs_query(
     Path(schema_id): Path<Uuid>,
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<QueryLogsRequest>,
-) -> AppResult<Json<PaginatedLogsResponse>> {
+) -> AppResult<Json<LogsResponse>> {
     get_logs_internal(state, schema_id, payload, request_id).await
 }
 
 async fn get_logs_with_schema_resolve_internal(
     state: AppState,
     schema_ref: SchemaNameVersion,
-    params: impl Into<QueryParams>,
+    params: QueryLogsRequest,
     request_id: RequestId,
-) -> AppResult<Json<PaginatedLogsResponse>> {
+) -> AppResult<Json<LogsResponse>> {
     let schema = state
         .schema_service
         .resolve_schema(&schema_ref)
@@ -121,7 +131,7 @@ pub async fn get_logs_by_schema_name_and_version(
     Path((schema_name, schema_version)): Path<(String, String)>,
     Query(params): Query<QueryLogsRequest>,
     Extension(request_id): Extension<RequestId>,
-) -> AppResult<Json<PaginatedLogsResponse>> {
+) -> AppResult<Json<LogsResponse>> {
     let schema_ref = SchemaNameVersion::with_version(schema_name, schema_version);
     get_logs_with_schema_resolve_internal(state, schema_ref, params, request_id).await
 }
@@ -131,7 +141,7 @@ pub async fn get_logs_by_schema_name_and_version_query(
     Path((schema_name, schema_version)): Path<(String, String)>,
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<QueryLogsRequest>,
-) -> AppResult<Json<PaginatedLogsResponse>> {
+) -> AppResult<Json<LogsResponse>> {
     let schema_ref = SchemaNameVersion::with_version(schema_name, schema_version);
     get_logs_with_schema_resolve_internal(state, schema_ref, payload, request_id).await
 }
@@ -141,7 +151,7 @@ pub async fn get_logs_by_schema_name_latest(
     Path(schema_name): Path<String>,
     Query(params): Query<QueryLogsRequest>,
     Extension(request_id): Extension<RequestId>,
-) -> AppResult<Json<PaginatedLogsResponse>> {
+) -> AppResult<Json<LogsResponse>> {
     let schema_ref = SchemaNameVersion::latest(schema_name);
     get_logs_with_schema_resolve_internal(state, schema_ref, params, request_id).await
 }
@@ -151,7 +161,24 @@ pub async fn get_logs_by_schema_name_latest_query(
     Path(schema_name): Path<String>,
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<QueryLogsRequest>,
-) -> AppResult<Json<PaginatedLogsResponse>> {
+) -> AppResult<Json<LogsResponse>> {
     let schema_ref = SchemaNameVersion::latest(schema_name);
     get_logs_with_schema_resolve_internal(state, schema_ref, payload, request_id).await
+}
+
+pub async fn get_initial_cursor(
+    State(state): State<AppState>,
+    Path(schema_id): Path<Uuid>,
+    Extension(request_id): Extension<RequestId>,
+) -> AppResult<Json<serde_json::Value>> {
+    let cursor = state
+        .log_service
+        .get_initial_cursor(schema_id)
+        .await
+        .with_req_id(&request_id)?;
+
+    Ok(Json(serde_json::json!({
+        "schema_id": schema_id,
+        "initial_cursor": cursor
+    })))
 }
