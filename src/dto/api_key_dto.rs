@@ -5,7 +5,7 @@ use validator::Validate;
 
 use crate::models::{api_key_model::CreatedApiKey, ApiKey};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKeyResponse {
     pub id: i32,
     pub key_prefix: Option<String>,
@@ -36,7 +36,7 @@ impl From<ApiKey> for ApiKeyResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKeysResponse {
     pub api_keys: Vec<ApiKeyResponse>,
 }
@@ -58,7 +58,7 @@ pub struct CreateApiKeyRequest {
     pub allowed_ips: Option<Vec<IpNetwork>>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateApiKeyResponse {
     pub id: i32,
     pub key: String,

@@ -1,6 +1,6 @@
 use sqlx::PgPool;
 
-use crate::{models::ApiKey, AppResult};
+use crate::{models::ApiKey, AppError, AppResult};
 
 pub struct ApiKeyRepository {
     pool: PgPool,
@@ -172,12 +172,20 @@ impl ApiKeyRepository {
         Ok(expired_active_api_keys)
     }
 
-    pub async fn delete(&self, id: i32) -> AppResult<bool> {
-        let result = sqlx::query("DELETE FROM api_keys WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+    pub async fn delete(&self, id: i32) -> AppResult<ApiKey> {
+        let deleted_api_key = sqlx::query_as::<_, ApiKey>(
+            r#"
+            DELETE FROM api_keys 
+            WHERE id = $1
+            RETURNING id, key_hash, key_prefix, name, description, created_at, 
+                      last_used_at, expires_at, is_active, usage_count, allowed_ips
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("Api Key with id '{}' not found", id)))?;
 
-        Ok(result.rows_affected() > 0)
+        Ok(deleted_api_key)
     }
 }

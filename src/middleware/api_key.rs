@@ -34,7 +34,6 @@ pub async fn api_key_middleware(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let client_ip = addr.ip();
-    println!("{}", client_ip);
     if !api_key.is_ip_allowed(&client_ip) {
         return Err(StatusCode::FORBIDDEN);
     }

@@ -37,6 +37,10 @@ impl ApiKeyService {
     }
 
     pub async fn create_api_key(&self, request: CreateApiKey) -> AppResult<CreatedApiKey> {
+        if request.name.trim().is_empty() {
+            return Err(AppError::bad_request("API key name cannot be empty"));
+        }
+
         let api_key_plain = Self::generate_key();
 
         let api_key_hash = Self::hash_key(&api_key_plain);
@@ -113,7 +117,7 @@ impl ApiKeyService {
             .map_err(|e| e.context("Failed to list API keys"))
     }
 
-    pub async fn delete_api_key(&self, id: i32) -> AppResult<bool> {
+    pub async fn delete_api_key(&self, id: i32) -> AppResult<ApiKey> {
         self.api_key_repository
             .delete(id)
             .await

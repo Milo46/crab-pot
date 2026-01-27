@@ -4,11 +4,11 @@ use serde_json::Value;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::{Log, QueryParams};
+use crate::{AppError, AppResult, Log, QueryParams};
 
-fn validate_uuid_not_nil(uuid: &Uuid) -> Result<(), validator::ValidationError> {
-    if uuid.is_nil() {
-        return Err(validator::ValidationError::new("uuid_nil"));
+fn validate_string_not_empty(string: &String) -> Result<(), validator::ValidationError> {
+    if string.trim().is_empty() {
+        return Err(validator::ValidationError::new("string_empty"));
     }
     Ok(())
 }
@@ -23,14 +23,35 @@ fn validate_log_data_is_object(value: &Value) -> Result<(), validator::Validatio
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateLogRequest {
     #[validate(custom(
-        function = "validate_uuid_not_nil",
-        message = "Schema ID cannot be nil"
+        function = "validate_string_not_empty",
+        message = "Schema ID cannot be empty"
     ))]
-    pub schema_id: Uuid,
+    pub schema_id: String,
     #[validate(custom(
         function = "validate_log_data_is_object",
         message = "Log data must be a JSON object"
     ))]
+    pub log_data: Value,
+}
+
+impl CreateLogRequest {
+    pub fn validate_and_transform(self) -> AppResult<CreateLogRequestValidated> {
+        self.validate()
+            .map_err(|e| AppError::bad_request(format!("Validation failed: {}", e)))?;
+
+        let schema_id = Uuid::parse_str(&self.schema_id)
+            .map_err(|e| AppError::bad_request(format!("Invalid UUID: {}", e)))?;
+
+        Ok(CreateLogRequestValidated {
+            schema_id,
+            log_data: self.log_data,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateLogRequestValidated {
+    pub schema_id: Uuid,
     pub log_data: Value,
 }
 
@@ -85,6 +106,7 @@ pub enum LogsResponse {
 pub struct LogResponse {
     pub id: i32,
     pub log_data: Value,
+    pub schema_id: Uuid,
     pub created_at: String,
 }
 
@@ -93,6 +115,7 @@ impl From<Log> for LogResponse {
         LogResponse {
             id: log.id,
             log_data: log.log_data,
+            schema_id: log.schema_id,
             created_at: log.created_at.to_rfc3339(),
         }
     }
@@ -104,9 +127,9 @@ pub struct QueryLogsRequest {
     pub page: i32,
     #[serde(default = "default_limit")]
     pub limit: i32,
-    
+
     pub cursor: Option<i32>,
-    
+
     pub date_begin: Option<DateTime<Utc>>,
     pub date_end: Option<DateTime<Utc>>,
     pub filters: Option<Value>,

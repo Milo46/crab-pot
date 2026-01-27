@@ -5,11 +5,24 @@ use validator::Validate;
 
 use crate::Schema;
 
+fn validate_string_not_empty(string: &String) -> Result<(), validator::ValidationError> {
+    if string.trim().is_empty() {
+        return Err(validator::ValidationError::new("string_empty"));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateSchemaRequest {
-    #[validate(length(min = 1, message = "Schema name cannot be empty"))]
+    #[validate(custom(
+        function = "validate_string_not_empty",
+        message = "Schema name cannot be empty"
+    ))]
     pub name: String,
-    #[validate(length(min = 1, message = "Schema version cannot be empty"))]
+    #[validate(custom(
+        function = "validate_string_not_empty",
+        message = "Schema version cannot be empty"
+    ))]
     pub version: String,
     pub description: Option<String>,
     pub schema_definition: Value,
@@ -17,9 +30,15 @@ pub struct CreateSchemaRequest {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateSchemaRequest {
-    #[validate(length(min = 1, message = "Schema name cannot be empty"))]
+    #[validate(custom(
+        function = "validate_string_not_empty",
+        message = "Schema name cannot be empty"
+    ))]
     pub name: String,
-    #[validate(length(min = 1, message = "Schema version cannot be empty"))]
+    #[validate(custom(
+        function = "validate_string_not_empty",
+        message = "Schema version cannot be empty"
+    ))]
     pub version: String,
     pub description: Option<String>,
     pub schema_definition: Value,

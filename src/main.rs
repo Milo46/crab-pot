@@ -35,7 +35,10 @@ async fn main() -> anyhow::Result<()> {
         schema_repository.clone(),
         log_repository.clone(),
     ));
-    let log_service = Arc::new(LogService::new(log_repository.clone()));
+    let log_service = Arc::new(LogService::new(
+        log_repository.clone(),
+        schema_repository.clone(),
+    ));
     let api_key_service = Arc::new(ApiKeyService::new(api_key_repository.clone()));
 
     let (log_broadcast_tx, _) = broadcast::channel(100);

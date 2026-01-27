@@ -4,7 +4,6 @@ use axum::{
     Extension, Json,
 };
 use uuid::Uuid;
-use validator::Validate;
 
 use crate::{
     dto::{CreateLogRequest, LogEvent, LogResponse, LogsResponse, QueryLogsRequest},
@@ -18,13 +17,11 @@ pub async fn create_log(
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<CreateLogRequest>,
 ) -> AppResult<(StatusCode, Json<LogResponse>)> {
-    payload
-        .validate()
-        .map_err(|e| crate::AppError::validation_error(format!("Validation failed: {}", e)))?;
+    let validated_payload = payload.validate_and_transform().with_req_id(&request_id)?;
 
     let log = state
         .log_service
-        .create_log(payload.schema_id, payload.log_data)
+        .create_log(validated_payload.schema_id, validated_payload.log_data)
         .await
         .with_req_id(&request_id)?;
 
@@ -79,7 +76,7 @@ async fn get_logs_internal(
             .get_cursor_logs(schema_id, cursor, params.limit)
             .await
             .with_req_id(&request_id)?;
-        
+
         Ok(Json(LogsResponse::Cursor(response)))
     } else {
         let query: QueryParams = params.into();

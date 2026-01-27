@@ -172,14 +172,16 @@ impl SchemaService {
         description: Option<String>,
         schema_definition: Value,
     ) -> AppResult<Schema> {
+        if id.is_nil() {
+            return Err(AppError::bad_request("Schema ID cannot be empty"));
+        }
+
         self.validate_schema_definition(&schema_definition)?;
 
         let existing_schema = self
-            .repository
-            .get_by_id(id)
+            .get_schema_by_id(id)
             .await
-            .map_err(|e| e.context(format!("Failed to fetch schema {}", id)))?
-            .ok_or_else(|| AppError::not_found(format!("Schema with id '{}' not found", id)))?;
+            .map_err(|e| e.context(format!("Failed to fetch schema {}", id)))?;
 
         let conflicting_schema = self
             .repository
@@ -219,6 +221,10 @@ impl SchemaService {
     }
 
     pub async fn delete_schema(&self, id: Uuid, force: bool) -> AppResult<bool> {
+        if id.is_nil() {
+            return Err(AppError::bad_request("Cannot delete Schema with nil UUID"));
+        }
+
         let schema = self
             .repository
             .get_by_id(id)
@@ -227,7 +233,7 @@ impl SchemaService {
 
         if schema.is_none() {
             return Err(AppError::not_found(format!(
-                "Schema with id '{}' not found",
+                "Schema with id {} not found",
                 id
             )));
         }

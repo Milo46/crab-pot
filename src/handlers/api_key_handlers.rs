@@ -19,8 +19,7 @@ pub async fn create_api_key(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<CreateApiKeyRequest>,
-) -> AppResult<Json<CreateApiKeyResponse>> {
-    // Validate at the boundary
+) -> AppResult<(StatusCode, Json<CreateApiKeyResponse>)> {
     payload
         .validate()
         .map_err(|e| AppError::validation_error(format!("Validation failed: {}", e)))?;
@@ -31,7 +30,10 @@ pub async fn create_api_key(
         .await
         .with_req_id(&request_id)?;
 
-    Ok(Json(CreateApiKeyResponse::from(created_api_key)))
+    Ok((
+        StatusCode::CREATED,
+        Json(CreateApiKeyResponse::from(created_api_key)),
+    ))
 }
 
 pub async fn get_api_keys(

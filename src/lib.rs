@@ -96,7 +96,10 @@ pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
         .route("/logs/{id}", delete(delete_log))
         .route("/logs/schemas/{schema_id}", get(get_logs))
         .route("/logs/schemas/{schema_id}", post(get_logs_query))
-        .route("/logs/schemas/{schema_id}/cursor/initial", get(get_initial_cursor))
+        .route(
+            "/logs/schemas/{schema_id}/cursor/initial",
+            get(get_initial_cursor),
+        )
         .route(
             "/logs/by-schema-name/{name}/latest",
             get(get_logs_by_schema_name_latest),

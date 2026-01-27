@@ -5,6 +5,7 @@ use crate::dto::log_dto::{
 use crate::error::AppResult;
 use crate::models::{Log, QueryParams};
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
+use crate::repositories::schema_repository::{SchemaRepository, SchemaRepositoryTrait};
 use crate::AppError;
 use chrono::Utc;
 use serde_json::Value;
@@ -14,11 +15,18 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct LogService {
     log_repository: Arc<LogRepository>,
+    schema_repository: Arc<SchemaRepository>,
 }
 
 impl LogService {
-    pub fn new(log_repository: Arc<LogRepository>) -> Self {
-        Self { log_repository }
+    pub fn new(
+        log_repository: Arc<LogRepository>,
+        schema_repository: Arc<SchemaRepository>,
+    ) -> Self {
+        Self {
+            log_repository,
+            schema_repository,
+        }
     }
 
     pub async fn get_logs_by_schema_id(
@@ -94,6 +102,24 @@ impl LogService {
             return Err(AppError::bad_request("Schema ID cannot be nil"));
         }
 
+        let schema_exists = self
+            .schema_repository
+            .get_by_id(schema_id)
+            .await
+            .map_err(|e| {
+                e.context(format!(
+                    "Failed to check schema existence for {}",
+                    schema_id
+                ))
+            })?;
+
+        if schema_exists.is_none() {
+            return Err(AppError::not_found(format!(
+                "Schema with id {} not found",
+                schema_id
+            )));
+        }
+
         let logs = self
             .log_repository
             .get_by_schema_id(schema_id, query_params.clone())
@@ -160,6 +186,25 @@ impl LogService {
             return Err(AppError::bad_request("Limit must be greater than 0"));
         }
 
+        // Verify that the schema exists
+        let schema_exists = self
+            .schema_repository
+            .get_by_id(schema_id)
+            .await
+            .map_err(|e| {
+                e.context(format!(
+                    "Failed to check schema existence for {}",
+                    schema_id
+                ))
+            })?;
+
+        if schema_exists.is_none() {
+            return Err(AppError::not_found(format!(
+                "Schema with id {} not found",
+                schema_id
+            )));
+        }
+
         let mut logs = self
             .log_repository
             .get_by_schema_id_with_cursor(schema_id, cursor, limit)
@@ -170,24 +215,24 @@ impl LogService {
                     schema_id
                 ))
             })?;
-        
+
         let has_more = logs.len() > limit as usize;
-        
+
         if has_more {
             logs.pop();
         }
-        
+
         let next_cursor = if has_more {
             logs.last().map(|log| log.id)
         } else {
             None
         };
-        
+
         // For backward pagination (toward newer logs):
         // prev_cursor would be first_id + 1, but we don't support
         // bidirectional pagination yet. Setting to None for clarity.
         let prev_cursor = None;
-        
+
         let logs_response: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
 
         Ok(CursorLogsResponse {
@@ -198,7 +243,7 @@ impl LogService {
                 next_cursor,
                 prev_cursor,
                 has_more,
-            }
+            },
         })
     }
 
@@ -211,7 +256,12 @@ impl LogService {
             .log_repository
             .get_latest_log_id(schema_id)
             .await
-            .map_err(|e| e.context(format!("Failed to get latest log ID for schema {}", schema_id)))?;
+            .map_err(|e| {
+                e.context(format!(
+                    "Failed to get latest log ID for schema {}",
+                    schema_id
+                ))
+            })?;
 
         Ok(latest_id.map(|id| id + 1).unwrap_or(i32::MAX))
     }
