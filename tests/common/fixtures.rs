@@ -42,3 +42,9 @@ pub fn valid_log_payload_with_message(schema_id: &str, message: &str) -> serde_j
         }
     })
 }
+
+pub fn valid_api_key_payload(name: &str) -> serde_json::Value {
+    json!({
+        "name": name
+    })
+}

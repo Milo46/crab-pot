@@ -1,3 +1,4 @@
+mod api_keys;
 mod common;
 mod logs;
 mod schemas;
@@ -17,7 +18,7 @@ mod health {
             .send()
             .await
             .unwrap();
-        
+
         assert_eq!(response.status(), StatusCode::OK);
 
         let body: serde_json::Value = response.json().await.expect("Failed to parse JSON");

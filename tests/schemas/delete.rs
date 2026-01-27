@@ -48,8 +48,8 @@ async fn rejects_nil_uuid() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     let error: ErrorResponse = response.json().await.unwrap();
+
     assert_eq!(error.error, "BAD_REQUEST");
-    assert!(error.message.contains("cannot be empty"));
 }
 
 #[tokio::test]

@@ -37,7 +37,7 @@ pub async fn get_schema_by_name_and_version(
 ) -> reqwest::Response {
     app.auth()
         .get(format!(
-            "/schemas/{}/version/{}",
+            "/schemas/by-name/{}/versions/{}",
             schema_name, schema_version
         ))
         .send()

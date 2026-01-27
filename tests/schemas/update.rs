@@ -129,7 +129,8 @@ async fn rejects_empty_schema_name() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     let error: ErrorResponse = response.json().await.unwrap();
-    assert_eq!(error.error, "BAD_REQUEST");
+
+    assert_eq!(error.error, "VALIDATION_ERROR");
     assert!(error.message.contains("Schema name cannot be empty"));
 }
 
@@ -152,7 +153,7 @@ async fn rejects_whitespace_only_schema_name() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     let error: ErrorResponse = response.json().await.unwrap();
-    assert_eq!(error.error, "BAD_REQUEST");
+    assert_eq!(error.error, "VALIDATION_ERROR");
     assert!(error.message.contains("Schema name cannot be empty"));
 }
 

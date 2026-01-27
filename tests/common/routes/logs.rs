@@ -47,7 +47,10 @@ pub async fn get_logs_by_schema_name<S: AsRef<str>>(
     schema_name: S,
 ) -> reqwest::Response {
     app.auth()
-        .get(format!("/logs/schema/{}", schema_name.as_ref()))
+        .get(format!(
+            "/logs/by-schema-name/{}/latest",
+            schema_name.as_ref()
+        ))
         .send()
         .await
         .unwrap()
@@ -60,7 +63,7 @@ pub async fn get_logs_by_schema_name_and_version<S: AsRef<str>>(
 ) -> reqwest::Response {
     app.auth()
         .get(format!(
-            "/logs/schema/{}/versions/{}",
+            "/logs/by-schema-name/{}/versions/{}",
             schema_name.as_ref(),
             schema_version.as_ref()
         ))
