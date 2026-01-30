@@ -18,21 +18,6 @@ use crate::{
     AppResult, AppState,
 };
 
-/// ## GET /schemas
-/// Get all schemas with optional filtering by name and/or version.
-///
-/// Query parameters:
-/// - name: Filter schemas by exact name match
-/// - version: Filter schemas by exact version match
-/// - Both can be combined for precise filtering
-///
-/// All filtering is performed at the database level for optimal performance.
-///
-/// Examples:
-/// - /schemas - Get all schemas
-/// - /schemas?name=web-server-logs - Get all versions of "web-server-logs"
-/// - /schemas?version=1.0.0 - Get all schemas with version "1.0.0"
-/// - /schemas?name=web-server-logs&version=1.0.0 - Get specific schema by name+version
 pub async fn get_schemas(
     State(state): State<AppState>,
     Query(query): Query<GetSchemasQuery>,
@@ -52,8 +37,20 @@ pub async fn get_schemas(
     Ok(Json(SchemasResponse::from(schemas)))
 }
 
-/// ## GET /schemas/{schema_name}/{schema_version}
-/// Get one schema with matching name and version.
+pub async fn get_schema_by_name_latest(
+    State(state): State<AppState>,
+    Path(schema_name): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+) -> AppResult<Json<SchemaResponse>> {
+    let schema = state
+        .schema_service
+        .get_schema_by_name(&schema_name)
+        .await
+        .with_req_id(&request_id)?;
+
+    Ok(Json(SchemaResponse::from(schema)))
+}
+
 pub async fn get_schema_by_name_and_version(
     State(state): State<AppState>,
     Path((schema_name, schema_version)): Path<(String, String)>,
@@ -68,8 +65,6 @@ pub async fn get_schema_by_name_and_version(
     Ok(Json(SchemaResponse::from(schema)))
 }
 
-/// ## GET /schemas/{schema_id}
-/// Get one schema with matching id.
 pub async fn get_schema_by_id(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -84,8 +79,6 @@ pub async fn get_schema_by_id(
     Ok(Json(SchemaResponse::from(schema)))
 }
 
-/// ## POST /schemas
-/// Create a new schema.
 pub async fn create_schema(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
@@ -120,8 +113,6 @@ pub async fn create_schema(
     ))
 }
 
-/// ## PUT /schemas/{schema_id}
-/// Update an existing schema.
 pub async fn update_schema(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -147,8 +138,6 @@ pub async fn update_schema(
     Ok(Json(SchemaResponse::from(schema)))
 }
 
-/// ## DELETE /schema/{schema_id}
-/// Delete a schema.
 pub async fn delete_schema(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,

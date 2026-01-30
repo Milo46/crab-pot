@@ -10,7 +10,7 @@ pub use log_handlers::{
     create_log, delete_log, get_initial_cursor, get_log_by_id, get_logs, get_logs_query,
 };
 pub use schema_handlers::{
-    create_schema, delete_schema, get_schema_by_id, get_schema_by_name_and_version, get_schemas,
-    update_schema,
+    create_schema, delete_schema, get_schema_by_id, get_schema_by_name_and_version,
+    get_schema_by_name_latest, get_schemas, update_schema,
 };
 pub use ws_handlers::ws_handler;

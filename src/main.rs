@@ -55,16 +55,20 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("📊 Main API endpoints:");
 
+    tracing::info!("Health:");
+    tracing::info!("  GET  /");
+    tracing::info!("  GET  /health");
     tracing::info!("Schemas:");
-    tracing::info!("  GET               /");
-    tracing::info!("  GET               /health");
     tracing::info!("  GET, POST         /schemas");
     tracing::info!("  GET, PUT, DELETE  /schemas/{{id}}");
+    tracing::info!("  GET               /schemas/by-name/{{name}}/latest");
     tracing::info!("  GET               /schemas/by-name/{{name}}/versions/{{version}}");
     tracing::info!("Logs:");
     tracing::info!("  POST         /logs");
     tracing::info!("  GET, DELETE  /logs/{{id}}");
     tracing::info!("  GET, POST    /logs/schemas/{{schema_id}}");
+    tracing::info!("  GET          /logs/schemas/{{schema_id}}/cursor/initial");
+    tracing::info!("  GET, POST    /logs/by-schema-name/{{name}}/latest");
     tracing::info!("  GET, POST    /logs/by-schema-name/{{name}}/versions/{{version}}");
     tracing::info!("WebSocket:");
     tracing::info!("  GET  /ws/logs");
