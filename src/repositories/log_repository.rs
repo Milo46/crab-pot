@@ -34,7 +34,7 @@ pub trait LogRepositoryTrait {
         cursor: i32,
         limit: i32,
     ) -> AppResult<Vec<Log>>;
-    
+
     async fn get_latest_log_id(&self, schema_id: Uuid) -> AppResult<Option<i32>>;
 }
 
@@ -58,7 +58,7 @@ impl LogRepositoryTrait for LogRepository {
         limit: i32,
     ) -> AppResult<Vec<Log>> {
         let fetch_limit = limit + 1;
-        
+
         let logs = sqlx::query_as::<_, Log>(
             r#"
             SELECT * FROM logs
@@ -168,7 +168,7 @@ impl LogRepositoryTrait for LogRepository {
 
         Ok(result.rows_affected() as i64)
     }
-    
+
     async fn get_latest_log_id(&self, schema_id: Uuid) -> AppResult<Option<i32>> {
         let result = sqlx::query_scalar::<_, i32>(
             r#"

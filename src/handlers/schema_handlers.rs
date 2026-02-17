@@ -9,12 +9,13 @@ use validator::Validate;
 
 use crate::{
     dto::{
-        schema_dto::SchemasResponse, CreateSchemaRequest, DeleteSchemaQuery, GetSchemasQuery,
-        SchemaResponse, UpdateSchemaRequest,
+        schema_dto::{CursorSchemasResponse, SchemaCursorMetadata},
+        CreateSchemaRequest, DeleteSchemaQuery, GetSchemasQuery, SchemaResponse,
+        UpdateSchemaRequest,
     },
     error::WithRequestId,
     middleware::RequestId,
-    repositories::schema_repository::SchemaQueryParams,
+    models::SchemaQueryParams,
     AppResult, AppState,
 };
 
@@ -22,19 +23,41 @@ pub async fn get_schemas(
     State(state): State<AppState>,
     Query(query): Query<GetSchemasQuery>,
     Extension(request_id): Extension<RequestId>,
-) -> AppResult<Json<SchemasResponse>> {
-    let repo_params = SchemaQueryParams {
-        name: query.name,
-        version: query.version,
-    };
+) -> AppResult<Json<CursorSchemasResponse>> {
+    if query.name.is_some() || query.version.is_some() {
+        let repo_params = SchemaQueryParams {
+            name: query.name,
+            version: query.version,
+        };
 
-    let schemas = state
+        let schemas = state
+            .schema_service
+            .get_all_schemas(Some(repo_params))
+            .await
+            .with_req_id(&request_id)?;
+
+        let schemas_response: Vec<SchemaResponse> =
+            schemas.into_iter().map(SchemaResponse::from).collect();
+
+        return Ok(Json(CursorSchemasResponse {
+            schemas: schemas_response,
+            cursor: SchemaCursorMetadata {
+                limit: 0,
+                next_cursor: None,
+                prev_cursor: None,
+                has_more: false,
+            },
+        }));
+    }
+
+    let limit = query.limit.unwrap_or(10);
+    let response = state
         .schema_service
-        .get_all_schemas(Some(repo_params))
+        .get_cursor_schemas(query.cursor, limit)
         .await
         .with_req_id(&request_id)?;
 
-    Ok(Json(SchemasResponse::from(schemas)))
+    Ok(Json(response))
 }
 
 pub async fn get_schema_by_name_latest(
@@ -153,4 +176,19 @@ pub async fn delete_schema(
         .with_req_id(&request_id)?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn get_schemas_initial_cursor(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> AppResult<Json<serde_json::Value>> {
+    let cursor = state
+        .schema_service
+        .get_initial_cursor()
+        .await
+        .with_req_id(&request_id)?;
+
+    Ok(Json(serde_json::json!({
+        "initial_cursor": cursor
+    })))
 }

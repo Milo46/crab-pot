@@ -1,22 +1,20 @@
 use crate::error::AppResult;
-use crate::models::Schema;
+use crate::models::{Schema, SchemaQueryParams};
+use crate::repositories::query_builder::SchemaQueryBuilder;
 use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Default)]
-pub struct SchemaQueryParams {
-    pub name: Option<String>,
-    pub version: Option<String>,
-}
-
 #[async_trait]
 pub trait SchemaRepositoryTrait {
     async fn get_all(&self, params: Option<SchemaQueryParams>) -> AppResult<Vec<Schema>>;
+    async fn get_all_with_cursor(&self, cursor: Option<Uuid>, limit: i32)
+        -> AppResult<Vec<Schema>>;
     async fn get_by_id(&self, id: Uuid) -> AppResult<Option<Schema>>;
     async fn get_by_name_latest(&self, name: &str) -> AppResult<Option<Schema>>;
     async fn get_by_name_and_version(&self, name: &str, version: &str)
         -> AppResult<Option<Schema>>;
+    async fn get_latest_schema_id(&self) -> AppResult<Option<Uuid>>;
     async fn create(&self, schema: &Schema) -> AppResult<Schema>;
     async fn update(&self, id: Uuid, schema: &Schema) -> AppResult<Option<Schema>>;
     async fn delete(&self, id: Uuid) -> AppResult<bool>;
@@ -36,53 +34,55 @@ impl SchemaRepository {
 #[async_trait]
 impl SchemaRepositoryTrait for SchemaRepository {
     async fn get_all(&self, params: Option<SchemaQueryParams>) -> AppResult<Vec<Schema>> {
-        let query_params = params.unwrap_or_default();
+        let schemas = SchemaQueryBuilder::select()
+            .filters(params.as_ref())
+            .order_by("created_at", "DESC")
+            .build()
+            .build_query_as::<Schema>()
+            .fetch_all(&self.pool)
+            .await?;
 
-        match (&query_params.name, &query_params.version) {
-            (Some(name), Some(version)) => {
-                tracing::debug!(
-                    "Querying schemas with name={} AND version={}",
-                    name,
-                    version
-                );
-                let schemas = sqlx::query_as::<_, Schema>(
-                    "SELECT * FROM schemas WHERE name = $1 AND version = $2 ORDER BY created_at DESC"
+        Ok(schemas)
+    }
+
+    async fn get_all_with_cursor(
+        &self,
+        cursor: Option<Uuid>,
+        limit: i32,
+    ) -> AppResult<Vec<Schema>> {
+        let fetch_limit = limit + 1;
+
+        let schemas = match cursor {
+            Some(cursor_id) => {
+                sqlx::query_as::<_, Schema>(
+                    r#"
+                    SELECT s.* FROM schemas s
+                    WHERE s.created_at < (SELECT created_at FROM schemas WHERE id = $1)
+                       OR (s.created_at = (SELECT created_at FROM schemas WHERE id = $1) AND s.id < $1)
+                    ORDER BY s.created_at DESC, s.id DESC
+                    LIMIT $2
+                    "#,
                 )
-                .bind(name)
-                .bind(version)
+                .bind(cursor_id)
+                .bind(fetch_limit)
                 .fetch_all(&self.pool)
-                .await?;
-                Ok(schemas)
+                .await?
             }
-            (Some(name), None) => {
-                tracing::debug!("Querying schemas with name={}", name);
-                let schemas = sqlx::query_as::<_, Schema>(
-                    "SELECT * FROM schemas WHERE name = $1 ORDER BY created_at DESC",
+            None => {
+                sqlx::query_as::<_, Schema>(
+                    r#"
+                    SELECT * FROM schemas
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT $1
+                    "#,
                 )
-                .bind(name)
+                .bind(fetch_limit)
                 .fetch_all(&self.pool)
-                .await?;
-                Ok(schemas)
+                .await?
             }
-            (None, Some(version)) => {
-                tracing::debug!("Querying schemas with version={}", version);
-                let schemas = sqlx::query_as::<_, Schema>(
-                    "SELECT * FROM schemas WHERE version = $1 ORDER BY created_at DESC",
-                )
-                .bind(version)
-                .fetch_all(&self.pool)
-                .await?;
-                Ok(schemas)
-            }
-            (None, None) => {
-                tracing::debug!("Querying all schemas");
-                let schemas =
-                    sqlx::query_as::<_, Schema>("SELECT * FROM schemas ORDER BY created_at DESC")
-                        .fetch_all(&self.pool)
-                        .await?;
-                Ok(schemas)
-            }
-        }
+        };
+
+        Ok(schemas)
     }
 
     async fn get_by_name_latest(&self, name: &str) -> AppResult<Option<Schema>> {
@@ -109,6 +109,7 @@ impl SchemaRepositoryTrait for SchemaRepository {
             .bind(id)
             .fetch_optional(&self.pool)
             .await?;
+
         Ok(schema)
     }
 
@@ -123,7 +124,22 @@ impl SchemaRepositoryTrait for SchemaRepository {
                 .bind(version)
                 .fetch_optional(&self.pool)
                 .await?;
+
         Ok(schema)
+    }
+
+    async fn get_latest_schema_id(&self) -> AppResult<Option<Uuid>> {
+        let result = sqlx::query_scalar::<_, Uuid>(
+            r#"
+            SELECT id FROM schemas
+            ORDER BY created_at DESC
+            LIMIT 1
+            "#,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(result)
     }
 
     async fn create(&self, schema: &Schema) -> AppResult<Schema> {

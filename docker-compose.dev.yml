@@ -33,6 +33,7 @@ services:
       API_KEY: ${API_KEY}
     volumes:
       - ./src:/app/src:ro
+      - ./benches:/app/benches:ro
       - ./Cargo.toml:/app/Cargo.toml:ro
     depends_on:
       - postgres

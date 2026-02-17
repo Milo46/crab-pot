@@ -3,6 +3,60 @@ use serde_json::Value;
 use sqlx::{Postgres, QueryBuilder};
 use uuid::Uuid;
 
+use crate::models::SchemaQueryParams;
+
+pub struct SchemaQueryBuilder<'a> {
+    query: QueryBuilder<'a, Postgres>,
+    conditions_added: bool,
+}
+
+impl<'a> SchemaQueryBuilder<'a> {
+    pub fn select() -> Self {
+        let query = QueryBuilder::new("SELECT * FROM schemas");
+        Self {
+            query,
+            conditions_added: false,
+        }
+    }
+
+    fn add_condition(&mut self) {
+        if !self.conditions_added {
+            self.query.push(" WHERE ");
+            self.conditions_added = true;
+        } else {
+            self.query.push(" AND ");
+        }
+    }
+
+    pub fn filters(mut self, params: Option<&'a SchemaQueryParams>) -> Self {
+        if let Some(query_params) = params {
+            if let Some(name) = &query_params.name {
+                self.add_condition();
+                self.query.push("name = ");
+                self.query.push_bind(name);
+            }
+            if let Some(version) = &query_params.version {
+                self.add_condition();
+                self.query.push("version = ");
+                self.query.push_bind(version);
+            }
+        }
+        self
+    }
+
+    pub fn order_by(mut self, column: &str, direction: &str) -> Self {
+        self.query.push(" ORDER BY ");
+        self.query.push(column);
+        self.query.push(" ");
+        self.query.push(direction);
+        self
+    }
+
+    pub fn build(self) -> QueryBuilder<'a, Postgres> {
+        self.query
+    }
+}
+
 pub struct LogQueryBuilder<'a> {
     query: QueryBuilder<'a, Postgres>,
     conditions_added: bool,

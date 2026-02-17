@@ -1,9 +1,9 @@
+use crate::dto::schema_dto::{CursorSchemasResponse, SchemaCursorMetadata};
 use crate::error::{AppError, AppResult};
-use crate::models::{Schema, SchemaNameVersion};
+use crate::models::{Schema, SchemaNameVersion, SchemaQueryParams};
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
-use crate::repositories::schema_repository::{
-    SchemaQueryParams, SchemaRepository, SchemaRepositoryTrait,
-};
+use crate::repositories::schema_repository::{SchemaRepository, SchemaRepositoryTrait};
+use crate::SchemaResponse;
 use chrono::Utc;
 use serde_json::Value;
 use std::sync::Arc;
@@ -94,6 +94,49 @@ impl SchemaService {
             .get_all(params)
             .await
             .map_err(|e| e.context("Failed to fetch schemas"))
+    }
+
+    pub async fn get_cursor_schemas(
+        &self,
+        cursor: Option<Uuid>,
+        limit: i32,
+    ) -> AppResult<CursorSchemasResponse> {
+        if limit <= 0 {
+            return Err(AppError::bad_request("Limit must be greater than 0"));
+        }
+
+        let mut schemas = self
+            .repository
+            .get_all_with_cursor(cursor, limit)
+            .await
+            .map_err(|e| e.context("Failed to get schemas with cursor feature"))?;
+
+        let has_more = schemas.len() > limit as usize;
+
+        if has_more {
+            schemas.pop();
+        }
+
+        let next_cursor = if has_more {
+            schemas.last().map(|schema| schema.id)
+        } else {
+            None
+        };
+
+        let prev_cursor = None;
+
+        let schemas_response: Vec<SchemaResponse> =
+            schemas.into_iter().map(SchemaResponse::from).collect();
+
+        Ok(CursorSchemasResponse {
+            schemas: schemas_response,
+            cursor: SchemaCursorMetadata {
+                limit,
+                next_cursor,
+                prev_cursor,
+                has_more,
+            },
+        })
     }
 
     pub async fn get_schema_by_id(&self, id: Uuid) -> AppResult<Schema> {
@@ -278,5 +321,15 @@ impl SchemaService {
         })?;
 
         Ok(())
+    }
+
+    pub async fn get_initial_cursor(&self) -> AppResult<Uuid> {
+        let latest_id = self
+            .repository
+            .get_latest_schema_id()
+            .await
+            .map_err(|e| e.context("Failed to get the latest schema ID"))?;
+
+        Ok(latest_id.unwrap_or(Uuid::nil()))
     }
 }

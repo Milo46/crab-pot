@@ -1,4 +1,4 @@
-# Log Server SRD (Software Requirements Document) - v0.9.0
+# Log Server SRD (Software Requirements Document) - v1.0.0
 
 # Table of Contents
 
@@ -821,9 +821,9 @@ Log Server implements a **security-first architecture** with two separate HTTP s
 │  │  • All /logs/* endpoints             │   │
 │  │  • GET /ws/logs (WebSocket)          │   │
 │  └──────────────────────────────────────┘   │
-│                                               │
+│                                             │
 │  Binding: 0.0.0.0:8080 (public-facing)      │
-│  Auth: Bearer token (API key)                │
+│  Auth: Bearer token (API key)               │
 └─────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────┐
@@ -837,9 +837,9 @@ Log Server implements a **security-first architecture** with two separate HTTP s
 │  │  • POST   /api-keys/{id}/rotate      │   │
 │  │  • GET    /health                    │   │
 │  └──────────────────────────────────────┘   │
-│                                               │
+│                                             │
 │  Binding: 127.0.0.1:8081 (localhost only)   │
-│  Auth: Network-level security (SSH, VPN)     │
+│  Auth: Network-level security (SSH, VPN)    │
 └─────────────────────────────────────────────┘
            │
            ▼

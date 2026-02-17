@@ -29,6 +29,7 @@ use crate::{
             get_logs_by_schema_name_and_version, get_logs_by_schema_name_and_version_query,
             get_logs_by_schema_name_latest, get_logs_by_schema_name_latest_query,
         },
+        schema_handlers::get_schemas_initial_cursor,
         update_schema, ws_handler,
     },
     middleware::api_key_middleware,
@@ -85,6 +86,7 @@ pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
         .route("/schemas/{id}", get(get_schema_by_id))
         .route("/schemas/{id}", put(update_schema))
         .route("/schemas/{id}", delete(delete_schema))
+        .route("/schemas/cursor/initial", get(get_schemas_initial_cursor))
         .route(
             "/schemas/by-name/{schema_name}/latest",
             get(get_schema_by_name_latest),

@@ -11,3 +11,4 @@ CREATE TABLE IF NOT EXISTS schemas (
 
 CREATE INDEX IF NOT EXISTS idx_schemas_name ON schemas(name);
 CREATE INDEX IF NOT EXISTS idx_schemas_name_version ON schemas(name, version);
+CREATE INDEX IF NOT EXISTS idx_schemas_created_at_id ON schemas(created_at DESC, id DESC);

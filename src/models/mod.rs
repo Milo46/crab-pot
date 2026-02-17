@@ -6,6 +6,6 @@ pub mod schema_name_version;
 
 pub use api_key_model::{ApiKey, CreateApiKey};
 pub use log_model::Log;
-pub use query_params::QueryParams;
+pub use query_params::{QueryParams, SchemaQueryParams};
 pub use schema_model::Schema;
 pub use schema_name_version::SchemaNameVersion;
