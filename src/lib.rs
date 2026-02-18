@@ -12,6 +12,7 @@ use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
+pub mod config;
 pub mod dto;
 pub mod error;
 pub mod handlers;
@@ -35,6 +36,7 @@ use crate::{
     middleware::api_key_middleware,
 };
 
+pub use config::Config;
 pub use dto::{LogEvent, PaginatedLogsResponse, PaginationMetadata, SchemaResponse};
 pub use error::{AppError, AppResult};
 pub use middleware::request_id::{RequestIdLayer, RequestIdMakeSpan};

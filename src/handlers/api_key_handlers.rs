@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{header, HeaderMap, StatusCode},
     Extension, Json,
 };
 use validator::Validate;
@@ -20,7 +20,7 @@ pub async fn create_api_key(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<CreateApiKeyRequest>,
-) -> AppResult<(StatusCode, Json<CreateApiKeyResponse>)> {
+) -> AppResult<(StatusCode, HeaderMap, Json<CreateApiKeyResponse>)> {
     payload
         .validate()
         .map_err(|e| AppError::validation_error(format!("Validation failed: {}", e)))?;
@@ -31,8 +31,19 @@ pub async fn create_api_key(
         .await
         .with_req_id(&request_id)?;
 
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::LOCATION,
+        format!("/api-keys/{}", created_api_key.api_key.id)
+            .parse()
+            .map_err(|e| {
+                AppError::internal_error(format!("Failed to create Location header: {}", e))
+            })?,
+    );
+
     Ok((
         StatusCode::CREATED,
+        headers,
         Json(CreateApiKeyResponse::from(created_api_key)),
     ))
 }

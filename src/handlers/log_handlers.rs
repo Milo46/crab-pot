@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{header, HeaderMap, StatusCode},
     Extension, Json,
 };
 use uuid::Uuid;
@@ -13,14 +13,14 @@ use crate::{
     error::WithRequestId,
     middleware::RequestId,
     models::query_params::LogQueryParams,
-    AppResult, AppState, SchemaNameVersion,
+    AppError, AppResult, AppState, SchemaNameVersion,
 };
 
 pub async fn create_log(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<CreateLogRequest>,
-) -> AppResult<(StatusCode, Json<LogResponse>)> {
+) -> AppResult<(StatusCode, HeaderMap, Json<LogResponse>)> {
     let validated_payload = payload.validate_and_transform().with_req_id(&request_id)?;
 
     let log = state
@@ -33,7 +33,15 @@ pub async fn create_log(
         .log_broadcast
         .send(LogEvent::created_from(log.clone()));
 
-    Ok((StatusCode::CREATED, Json(LogResponse::from(log))))
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::LOCATION,
+        format!("/logs/{}", log.id).parse().map_err(|e| {
+            AppError::internal_error(format!("Failed to create Location header: {}", e))
+        })?,
+    );
+
+    Ok((StatusCode::CREATED, headers, Json(LogResponse::from(log))))
 }
 
 pub async fn get_log_by_id(

@@ -1,5 +1,5 @@
 use log_server::{
-    create_admin_app, create_app, ApiKeyRepository, ApiKeyService, AppState, LogRepository,
+    create_admin_app, create_app, ApiKeyRepository, ApiKeyService, AppState, Config, LogRepository,
     LogService, SchemaRepository, SchemaService,
 };
 use std::net::SocketAddr;
@@ -9,11 +9,13 @@ use tokio::sync::broadcast;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let config = Config::from_env()?;
+
     use tracing_subscriber::fmt::format::FmtSpan;
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "tower_http=debug,log_server=debug,info".into()),
+                .unwrap_or_else(|_| config.rust_log.clone().into()),
         )
         .with_target(true)
         .with_thread_ids(false)
@@ -21,10 +23,7 @@ async fn main() -> anyhow::Result<()> {
         .with_span_events(FmtSpan::CLOSE)
         .init();
 
-    let database_url =
-        env::var("DATABASE_URL").expect("DATABASE_URL environment variable is not set");
-
-    let pool = sqlx::postgres::PgPool::connect(&database_url).await?;
+    let pool = sqlx::postgres::PgPool::connect(&config.database_url).await?;
     tracing::info!("✅ Database connected successfully!");
 
     let schema_repository = Arc::new(SchemaRepository::new(pool.clone()));
@@ -41,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
     ));
     let api_key_service = Arc::new(ApiKeyService::new(api_key_repository.clone()));
 
-    let (log_broadcast_tx, _) = broadcast::channel(100);
+    let (log_broadcast_tx, _) = broadcast::channel(config.broadcast_channel_size);
 
     let app_state = AppState {
         schema_service,
@@ -92,8 +91,8 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::warn!("⚠️  For production, bind admin API to 127.0.0.1 and use SSH tunnel or VPN.");
 
-    let main_listener = TcpListener::bind(main_addr).await?;
-    let admin_listener = TcpListener::bind(admin_addr).await?;
+    let main_listener = TcpListener::bind(config.main_api_addr).await?;
+    let admin_listener = TcpListener::bind(config.admin_api_addr).await?;
 
     let admin_server = tokio::spawn(async move {
         tracing::info!("Starting Admin API server...");

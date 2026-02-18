@@ -15,14 +15,14 @@ use crate::{
     error::WithRequestId,
     middleware::RequestId,
     models::SchemaQueryParams,
-    AppResult, AppState,
+    AppError, AppResult, AppState,
 };
 
 pub async fn get_schemas(
     State(state): State<AppState>,
     Query(query): Query<GetSchemasQuery>,
     Extension(request_id): Extension<RequestId>,
-) -> AppResult<Json<CursorSchemasResponse>> {
+) -> AppResult<(HeaderMap, Json<CursorSchemasResponse>)> {
     let filters = SchemaQueryParams {
         name: query.name,
         version: query.version,
@@ -34,7 +34,22 @@ pub async fn get_schemas(
         .await
         .with_req_id(&request_id)?;
 
-    Ok(Json(CursorSchemasResponse::new(schemas, cursor_metadata)))
+    let mut headers = HeaderMap::new();
+    if let Some(next_cursor) = &cursor_metadata.next_cursor {
+        headers.insert(
+            header::LINK,
+            format!("</schemas?cursor={}>; rel=\"next\"", next_cursor)
+                .parse()
+                .map_err(|e| {
+                    AppError::internal_error(format!("Failed to create Link header: {}", e))
+                })?,
+        );
+    }
+
+    Ok((
+        headers,
+        Json(CursorSchemasResponse::new(schemas, cursor_metadata)),
+    ))
 }
 
 pub async fn get_schema_by_name_latest(
@@ -83,7 +98,7 @@ pub async fn create_schema(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
     Json(payload): Json<CreateSchemaRequest>,
-) -> AppResult<impl IntoResponse> {
+) -> AppResult<(StatusCode, HeaderMap, Json<SchemaResponse>)> {
     payload
         .validate()
         .map_err(|e| crate::AppError::validation_error(format!("Validation failed: {}", e)))?;
@@ -103,7 +118,9 @@ pub async fn create_schema(
     let mut headers = HeaderMap::new();
     headers.insert(
         header::LOCATION,
-        format!("/schemas/{}", schema_id).parse().unwrap(),
+        format!("/schemas/{}", schema_id).parse().map_err(|e| {
+            AppError::internal_error(format!("Failed to create Location header: {}", e))
+        })?,
     );
 
     Ok((
