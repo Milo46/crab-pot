@@ -60,6 +60,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("  GET  /health");
     tracing::info!("Schemas:");
     tracing::info!("  GET, POST         /schemas");
+    tracing::info!("  GET               /schemas/cursor/initial");
     tracing::info!("  GET, PUT, DELETE  /schemas/{{id}}");
     tracing::info!("  GET               /schemas/by-name/{{name}}/latest");
     tracing::info!("  GET               /schemas/by-name/{{name}}/versions/{{version}}");

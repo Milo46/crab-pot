@@ -82,10 +82,26 @@ impl From<Vec<Schema>> for SchemasResponse {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct SchemaCursorMetadata {
+    pub limit: i32,
+    pub next_cursor: Option<Uuid>,
+    pub prev_cursor: Option<Uuid>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CursorSchemasResponse {
+    pub schemas: Vec<SchemaResponse>,
+    pub cursor: SchemaCursorMetadata,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct GetSchemasQuery {
     pub name: Option<String>,
     pub version: Option<String>,
+    pub cursor: Option<Uuid>,
+    pub limit: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]

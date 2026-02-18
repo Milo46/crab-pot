@@ -9,3 +9,9 @@ pub struct QueryParams {
     pub date_end: Option<DateTime<Utc>>,
     pub filters: Option<Value>,
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct SchemaQueryParams {
+    pub name: Option<String>,
+    pub version: Option<String>,
+}
