@@ -4,7 +4,7 @@ use serde_json::Value;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::{AppError, AppResult, Log, QueryParams};
+use crate::{dto::cursor::CursorMetadata, AppError, AppResult, Log, QueryParams};
 
 fn validate_string_not_empty(string: &String) -> Result<(), validator::ValidationError> {
     if string.trim().is_empty() {
@@ -79,20 +79,20 @@ pub struct PaginatedLogsResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct CursorMetadata {
-    pub limit: i32,
-    pub next_cursor: Option<i32>,
-    /// Cursor for fetching the previous page (toward newer logs).
-    /// Currently not supported - always None.
-    pub prev_cursor: Option<i32>,
-    pub has_more: bool,
-}
-
-#[derive(Debug, Serialize)]
 pub struct CursorLogsResponse {
     pub schema_id: Uuid,
     pub logs: Vec<LogResponse>,
-    pub cursor: CursorMetadata,
+    pub cursor: CursorMetadata<i32>,
+}
+
+impl CursorLogsResponse {
+    pub fn new(schema_id: Uuid, logs: Vec<Log>, cursor: CursorMetadata<i32>) -> Self {
+        Self {
+            schema_id,
+            logs: logs.into_iter().map(LogResponse::from).collect(),
+            cursor,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -121,6 +121,14 @@ impl From<Log> for LogResponse {
     }
 }
 
+fn default_page() -> i32 {
+    1
+}
+
+fn default_limit() -> i32 {
+    10
+}
+
 #[derive(Debug, Deserialize)]
 pub struct QueryLogsRequest {
     #[serde(default = "default_page")]
@@ -145,13 +153,6 @@ impl From<QueryLogsRequest> for QueryParams {
             filters: req.filters,
         }
     }
-}
-
-fn default_page() -> i32 {
-    1
-}
-fn default_limit() -> i32 {
-    10
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

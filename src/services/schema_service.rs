@@ -1,4 +1,5 @@
-use crate::dto::schema_dto::{CursorSchemasResponse, SchemaCursorMetadata};
+use crate::dto::schema_dto::CursorSchemasResponse;
+use crate::dto::CursorMetadata;
 use crate::error::{AppError, AppResult};
 use crate::models::{Schema, SchemaNameVersion, SchemaQueryParams};
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
@@ -100,7 +101,7 @@ impl SchemaService {
         &self,
         cursor: Option<Uuid>,
         limit: i32,
-    ) -> AppResult<CursorSchemasResponse> {
+    ) -> AppResult<(Vec<Schema>, CursorMetadata<Uuid>)> {
         if limit <= 0 {
             return Err(AppError::bad_request("Limit must be greater than 0"));
         }
@@ -125,18 +126,15 @@ impl SchemaService {
 
         let prev_cursor = None;
 
-        let schemas_response: Vec<SchemaResponse> =
-            schemas.into_iter().map(SchemaResponse::from).collect();
-
-        Ok(CursorSchemasResponse {
-            schemas: schemas_response,
-            cursor: SchemaCursorMetadata {
+        Ok((
+            schemas,
+            CursorMetadata::<Uuid> {
                 limit,
                 next_cursor,
                 prev_cursor,
                 has_more,
             },
-        })
+        ))
     }
 
     pub async fn get_schema_by_id(&self, id: Uuid) -> AppResult<Schema> {

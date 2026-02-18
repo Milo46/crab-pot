@@ -9,9 +9,8 @@ use validator::Validate;
 
 use crate::{
     dto::{
-        schema_dto::{CursorSchemasResponse, SchemaCursorMetadata},
-        CreateSchemaRequest, DeleteSchemaQuery, GetSchemasQuery, SchemaResponse,
-        UpdateSchemaRequest,
+        schema_dto::CursorSchemasResponse, CreateSchemaRequest, CursorMetadata, DeleteSchemaQuery,
+        GetSchemasQuery, SchemaResponse, UpdateSchemaRequest,
     },
     error::WithRequestId,
     middleware::RequestId,
@@ -41,7 +40,7 @@ pub async fn get_schemas(
 
         return Ok(Json(CursorSchemasResponse {
             schemas: schemas_response,
-            cursor: SchemaCursorMetadata {
+            cursor: CursorMetadata::<Uuid> {
                 limit: 0,
                 next_cursor: None,
                 prev_cursor: None,
@@ -51,13 +50,13 @@ pub async fn get_schemas(
     }
 
     let limit = query.limit.unwrap_or(10);
-    let response = state
+    let (schemas, cursor_metadata) = state
         .schema_service
         .get_cursor_schemas(query.cursor, limit)
         .await
         .with_req_id(&request_id)?;
 
-    Ok(Json(response))
+    Ok(Json(CursorSchemasResponse::new(schemas, cursor_metadata)))
 }
 
 pub async fn get_schema_by_name_latest(

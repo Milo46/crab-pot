@@ -3,7 +3,7 @@ use serde_json::Value;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::Schema;
+use crate::{dto::cursor::CursorMetadata, Schema};
 
 fn validate_string_not_empty(string: &String) -> Result<(), validator::ValidationError> {
     if string.trim().is_empty() {
@@ -83,17 +83,18 @@ impl From<Vec<Schema>> for SchemasResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct SchemaCursorMetadata {
-    pub limit: i32,
-    pub next_cursor: Option<Uuid>,
-    pub prev_cursor: Option<Uuid>,
-    pub has_more: bool,
-}
-
-#[derive(Debug, Serialize)]
 pub struct CursorSchemasResponse {
     pub schemas: Vec<SchemaResponse>,
-    pub cursor: SchemaCursorMetadata,
+    pub cursor: CursorMetadata<Uuid>,
+}
+
+impl CursorSchemasResponse {
+    pub fn new(schemas: Vec<Schema>, cursor: CursorMetadata<Uuid>) -> Self {
+        Self {
+            schemas: schemas.into_iter().map(SchemaResponse::from).collect(),
+            cursor,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
