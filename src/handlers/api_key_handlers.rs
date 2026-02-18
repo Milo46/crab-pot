@@ -6,8 +6,9 @@ use axum::{
 use validator::Validate;
 
 use crate::{
-    dto::api_key_dto::{
-        ApiKeyResponse, ApiKeysResponse, CreateApiKeyRequest, CreateApiKeyResponse,
+    dto::{
+        api_key_dto::{ApiKeyResponse, ApiKeysResponse, CreateApiKeyRequest, CreateApiKeyResponse},
+        common::DeletedResponse,
     },
     error::WithRequestId,
     middleware::RequestId,
@@ -65,13 +66,17 @@ pub async fn delete_api_key(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
     Path(api_key_id): Path<i32>,
-) -> AppResult<StatusCode> {
-    state
+) -> AppResult<Json<DeletedResponse<ApiKeyResponse>>> {
+    let deleted_api_key = state
         .api_key_service
         .delete_api_key(api_key_id)
         .await
         .with_req_id(&request_id)?;
-    Ok(StatusCode::NO_CONTENT)
+
+    Ok(Json(DeletedResponse {
+        deleted: true,
+        data: ApiKeyResponse::from(deleted_api_key),
+    }))
 }
 
 pub async fn rotate_api_key(

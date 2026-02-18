@@ -21,7 +21,7 @@ pub trait SchemaRepositoryTrait {
     async fn get_latest_schema_id(&self) -> AppResult<Option<Uuid>>;
     async fn create(&self, schema: &Schema) -> AppResult<Schema>;
     async fn update(&self, id: Uuid, schema: &Schema) -> AppResult<Option<Schema>>;
-    async fn delete(&self, id: Uuid) -> AppResult<bool>;
+    async fn delete(&self, id: Uuid) -> AppResult<Option<Schema>>;
 }
 
 #[derive(Clone)]
@@ -57,13 +57,9 @@ impl SchemaRepositoryTrait for SchemaRepository {
     ) -> AppResult<Vec<Schema>> {
         let fetch_limit = limit + 1;
 
-        let mut builder = SchemaQueryBuilder::select().filters(Some(&filters));
-
-        if let Some(cursor_id) = cursor {
-            builder = builder.cursor(cursor_id);
-        }
-
-        let schemas = builder
+        let schemas = SchemaQueryBuilder::select()
+            .filters(Some(&filters))
+            .cursor(cursor)
             .order_by("created_at", "DESC")
             .then_order_by("id", "DESC")
             .limit(fetch_limit)
@@ -174,12 +170,13 @@ impl SchemaRepositoryTrait for SchemaRepository {
         Ok(updated_schema)
     }
 
-    async fn delete(&self, id: Uuid) -> AppResult<bool> {
-        let result = sqlx::query("DELETE FROM schemas WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+    async fn delete(&self, id: Uuid) -> AppResult<Option<Schema>> {
+        let deleted_schema =
+            sqlx::query_as::<_, Schema>("DELETE FROM schemas WHERE id = $1 RETURNING *")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
 
-        Ok(result.rows_affected() > 0)
+        Ok(deleted_schema)
     }
 }

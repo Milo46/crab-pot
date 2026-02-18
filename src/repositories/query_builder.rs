@@ -16,6 +16,12 @@ macro_rules! impl_common_builder_methods {
             }
 
             pub fn order_by(mut self, column: &str, direction: &str) -> Self {
+                let valid_columns = ["id", "created_at", "name", "version"];
+                let valid_directions = ["ASC", "DESC"];
+
+                assert!(valid_columns.contains(&column), "Invalid column");
+                assert!(valid_directions.contains(&direction), "Invalid direction");
+
                 self.query.push(" ORDER BY ");
                 self.query.push(column);
                 self.query.push(" ");
@@ -74,17 +80,19 @@ impl<'a> SchemaQueryBuilder<'a> {
         self
     }
 
-    pub fn cursor(mut self, cursor_id: Uuid) -> Self {
-        self.add_condition();
-        self.query
-            .push("(created_at < (SELECT created_at FROM schemas WHERE id = ");
-        self.query.push_bind(cursor_id);
-        self.query
-            .push(") OR (created_at = (SELECT created_at FROM schemas WHERE id = ");
-        self.query.push_bind(cursor_id);
-        self.query.push(") AND id < ");
-        self.query.push_bind(cursor_id);
-        self.query.push("))");
+    pub fn cursor(mut self, cursor_id: Option<Uuid>) -> Self {
+        if let Some(id) = cursor_id {
+            self.add_condition();
+            self.query
+                .push("(created_at < (SELECT created_at FROM schemas WHERE id = ");
+            self.query.push_bind(id);
+            self.query
+                .push(") OR (created_at = (SELECT created_at FROM schemas WHERE id = ");
+            self.query.push_bind(id);
+            self.query.push(") AND id < ");
+            self.query.push_bind(id);
+            self.query.push("))");
+        }
         self
     }
 }
@@ -145,23 +153,14 @@ impl<'a> LogQueryBuilder<'a> {
             self.add_condition();
             self.query
                 .push("(created_at < (SELECT created_at FROM logs WHERE id = ");
-            self.query.push_bind(cursor_id);
+            self.query.push_bind(id);
             self.query
                 .push(") OR (created_at = (SELECT created_at FROM logs WHERE id = ");
-            self.query.push_bind(cursor_id);
+            self.query.push_bind(id);
             self.query.push(") AND id < ");
-            self.query.push_bind(cursor_id);
+            self.query.push_bind(id);
             self.query.push("))");
         }
-        self
-    }
-
-    pub fn paginate(mut self, page: i32, limit: i32) -> Self {
-        let offset = (page - 1) * limit;
-        self.query.push(" LIMIT ");
-        self.query.push_bind(limit);
-        self.query.push(" OFFSET ");
-        self.query.push_bind(offset);
         self
     }
 }

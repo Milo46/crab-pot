@@ -9,3 +9,9 @@ pub struct CursorMetadata<T> {
     pub prev_cursor: Option<T>,
     pub has_more: bool,
 }
+
+#[derive(Debug, Serialize)]
+pub struct DeletedResponse<T> {
+    pub deleted: bool,
+    pub data: T,
+}

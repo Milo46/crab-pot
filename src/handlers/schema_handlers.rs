@@ -9,8 +9,8 @@ use validator::Validate;
 
 use crate::{
     dto::{
-        schema_dto::CursorSchemasResponse, CreateSchemaRequest, DeleteSchemaQuery, GetSchemasQuery,
-        SchemaResponse, UpdateSchemaRequest,
+        common::DeletedResponse, schema_dto::CursorSchemasResponse, CreateSchemaRequest,
+        DeleteSchemaQuery, GetSchemasQuery, SchemaResponse, UpdateSchemaRequest,
     },
     error::WithRequestId,
     middleware::RequestId,
@@ -143,16 +143,19 @@ pub async fn delete_schema(
     Path(id): Path<Uuid>,
     Query(params): Query<DeleteSchemaQuery>,
     Extension(request_id): Extension<RequestId>,
-) -> AppResult<StatusCode> {
+) -> AppResult<Json<DeletedResponse<SchemaResponse>>> {
     let force = params.force.unwrap_or(false);
 
-    state
+    let deleted_schema = state
         .schema_service
         .delete_schema(id, force)
         .await
         .with_req_id(&request_id)?;
 
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(DeletedResponse {
+        deleted: true,
+        data: SchemaResponse::from(deleted_schema),
+    }))
 }
 
 pub async fn get_schemas_initial_cursor(

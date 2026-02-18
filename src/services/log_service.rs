@@ -61,7 +61,8 @@ impl LogService {
         self.log_repository
             .delete(id)
             .await
-            .map_err(|e| e.context(format!("Failed to delete log {}", id)))
+            .map_err(|e| e.context(format!("Failed to delete log {}", id)))?
+            .ok_or_else(|| AppError::not_found(format!("Log with id {} not found", id)))
     }
 
     pub async fn count_logs_by_schema_id(
@@ -110,7 +111,7 @@ impl LogService {
 
         let mut logs = self
             .log_repository
-            .get_by_schema_id_with_cursor(schema_id, cursor, limit, filters)
+            .get_all_with_cursor(schema_id, cursor, limit, filters)
             .await
             .map_err(|e| {
                 e.context(format!(

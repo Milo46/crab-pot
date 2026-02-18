@@ -2,30 +2,30 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
 use crate::models::query_params::LogQueryParams;
 use crate::models::Log;
 use crate::repositories::query_builder::LogQueryBuilder;
 
 #[async_trait]
 pub trait LogRepositoryTrait {
-    async fn get_by_id(&self, id: i32) -> AppResult<Option<Log>>;
-    async fn create(&self, log: &Log) -> AppResult<Log>;
-    async fn delete(&self, id: i32) -> AppResult<Log>;
-    async fn count_by_schema_id(
-        &self,
-        schema_id: Uuid,
-        query_params: Option<&LogQueryParams>,
-    ) -> AppResult<i64>;
-    async fn delete_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64>;
-
-    async fn get_by_schema_id_with_cursor(
+    async fn get_all_with_cursor(
         &self,
         schema_id: Uuid,
         cursor: Option<i32>,
         limit: i32,
         filters: LogQueryParams,
     ) -> AppResult<Vec<Log>>;
+    async fn get_by_id(&self, id: i32) -> AppResult<Option<Log>>;
+    async fn create(&self, log: &Log) -> AppResult<Log>;
+    async fn delete(&self, id: i32) -> AppResult<Option<Log>>;
+    async fn delete_all_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64>;
+
+    async fn count_by_schema_id(
+        &self,
+        schema_id: Uuid,
+        query_params: Option<&LogQueryParams>,
+    ) -> AppResult<i64>;
 
     async fn get_latest_log_id(&self, schema_id: Uuid) -> AppResult<Option<i32>>;
 }
@@ -43,7 +43,7 @@ impl LogRepository {
 
 #[async_trait]
 impl LogRepositoryTrait for LogRepository {
-    async fn get_by_schema_id_with_cursor(
+    async fn get_all_with_cursor(
         &self,
         schema_id: Uuid,
         cursor: Option<i32>,
@@ -93,14 +93,13 @@ impl LogRepositoryTrait for LogRepository {
         Ok(created_log)
     }
 
-    async fn delete(&self, id: i32) -> AppResult<Log> {
+    async fn delete(&self, id: i32) -> AppResult<Option<Log>> {
         let deleted_log = sqlx::query_as::<_, Log>(
             "DELETE FROM logs WHERE id = $1 RETURNING id, schema_id, log_data, created_at",
         )
         .bind(id)
         .fetch_optional(&self.pool)
-        .await?
-        .ok_or_else(|| AppError::not_found(format!("Log with id '{}' not found", id)))?;
+        .await?;
 
         Ok(deleted_log)
     }
@@ -121,7 +120,7 @@ impl LogRepositoryTrait for LogRepository {
         Ok(count)
     }
 
-    async fn delete_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64> {
+    async fn delete_all_by_schema_id(&self, schema_id: Uuid) -> AppResult<i64> {
         let result = sqlx::query("DELETE FROM logs WHERE schema_id = $1")
             .bind(schema_id)
             .execute(&self.pool)

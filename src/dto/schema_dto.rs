@@ -3,7 +3,7 @@ use serde_json::Value;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::{dto::cursor::CursorMetadata, Schema};
+use crate::{dto::common::CursorMetadata, Schema};
 
 fn validate_string_not_empty(string: &String) -> Result<(), validator::ValidationError> {
     if string.trim().is_empty() {

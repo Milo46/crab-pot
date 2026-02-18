@@ -1,6 +1,11 @@
 use sqlx::PgPool;
 
-use crate::{models::ApiKey, AppError, AppResult};
+use crate::{models::ApiKey, AppResult};
+
+const API_KEY_COLUMNS: &str = r#"
+    id, key_hash, key_prefix, name, description, created_at,
+    last_used_at, expires_at, is_active, usage_count, allowed_ips
+"#;
 
 pub struct ApiKeyRepository {
     pool: PgPool,
@@ -11,15 +16,11 @@ impl ApiKeyRepository {
         Self { pool }
     }
 
-    pub async fn find_by_id(&self, id: i32) -> AppResult<Option<ApiKey>> {
-        let result = sqlx::query_as::<_, ApiKey>(
-            r#"
-            SELECT id, key_hash, key_prefix, name, description, created_at,
-                   last_used_at, expires_at, is_active, usage_count, allowed_ips
-            FROM api_keys
-            WHERE id = $1
-            "#,
-        )
+    pub async fn get_by_id(&self, id: i32) -> AppResult<Option<ApiKey>> {
+        let result = sqlx::query_as::<_, ApiKey>(&format!(
+            "SELECT {} FROM api_keys WHERE id = $1",
+            API_KEY_COLUMNS
+        ))
         .bind(id)
         .fetch_optional(&self.pool)
         .await?;
@@ -27,15 +28,11 @@ impl ApiKeyRepository {
         Ok(result)
     }
 
-    pub async fn find_by_hash(&self, key_hash: &str) -> AppResult<Option<ApiKey>> {
-        let result = sqlx::query_as::<_, ApiKey>(
-            r#"
-            SELECT id, key_hash, key_prefix, name, description, created_at,
-                   last_used_at, expires_at, is_active, usage_count, allowed_ips
-            FROM api_keys
-            WHERE key_hash = $1
-            "#,
-        )
+    pub async fn get_by_hash(&self, key_hash: &str) -> AppResult<Option<ApiKey>> {
+        let result = sqlx::query_as::<_, ApiKey>(&format!(
+            "SELECT {} FROM api_keys WHERE key_hash = $1",
+            API_KEY_COLUMNS
+        ))
         .bind(key_hash)
         .fetch_optional(&self.pool)
         .await?;
@@ -43,17 +40,15 @@ impl ApiKeyRepository {
         Ok(result)
     }
 
-    pub async fn find_valid_by_hash(&self, key_hash: &str) -> AppResult<Option<ApiKey>> {
-        let result = sqlx::query_as::<_, ApiKey>(
-            r#"
-            SELECT id, key_hash, key_prefix, name, description, created_at, 
-                   last_used_at, expires_at, is_active, usage_count, allowed_ips
+    pub async fn get_valid_by_hash(&self, key_hash: &str) -> AppResult<Option<ApiKey>> {
+        let result = sqlx::query_as::<_, ApiKey>(&format!(
+            "SELECT {}
             FROM api_keys
-            WHERE key_hash = $1 
+            WHERE key_hash = $1
                 AND is_active = true
-                AND (expires_at IS NULL OR expires_at > NOW())
-            "#,
-        )
+                AND (expires_at IS NULL OR expires_at > NOW())",
+            API_KEY_COLUMNS
+        ))
         .bind(key_hash)
         .fetch_optional(&self.pool)
         .await?;
@@ -140,7 +135,7 @@ impl ApiKeyRepository {
         Ok(rotated_key)
     }
 
-    pub async fn list(&self) -> AppResult<Vec<ApiKey>> {
+    pub async fn get_all(&self) -> AppResult<Vec<ApiKey>> {
         let api_keys = sqlx::query_as::<_, ApiKey>(
             r#"
             SELECT id, key_hash, key_prefix, name, description, created_at, 
@@ -155,7 +150,7 @@ impl ApiKeyRepository {
         Ok(api_keys)
     }
 
-    pub async fn find_expired_active(&self) -> AppResult<Vec<ApiKey>> {
+    pub async fn get_expired_active(&self) -> AppResult<Vec<ApiKey>> {
         let expired_active_api_keys = sqlx::query_as::<_, ApiKey>(
             r#"
             SELECT id, key_hash, key_prefix, name, description, created_at, 
@@ -172,7 +167,7 @@ impl ApiKeyRepository {
         Ok(expired_active_api_keys)
     }
 
-    pub async fn delete(&self, id: i32) -> AppResult<ApiKey> {
+    pub async fn delete(&self, id: i32) -> AppResult<Option<ApiKey>> {
         let deleted_api_key = sqlx::query_as::<_, ApiKey>(
             r#"
             DELETE FROM api_keys 
@@ -183,8 +178,7 @@ impl ApiKeyRepository {
         )
         .bind(id)
         .fetch_optional(&self.pool)
-        .await?
-        .ok_or_else(|| AppError::not_found(format!("Api Key with id '{}' not found", id)))?;
+        .await?;
 
         Ok(deleted_api_key)
     }

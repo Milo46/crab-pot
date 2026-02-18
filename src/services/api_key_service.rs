@@ -89,7 +89,7 @@ impl ApiKeyService {
 
     pub async fn find_by_id(&self, id: i32) -> AppResult<ApiKey> {
         self.api_key_repository
-            .find_by_id(id)
+            .get_by_id(id)
             .await
             .map_err(|e| e.context(format!("Failed to fetch API key {}", id)))?
             .ok_or_else(|| AppError::not_found(format!("Api key with id {} not found", id)))
@@ -97,7 +97,7 @@ impl ApiKeyService {
 
     pub async fn find_valid_by_hash(&self, key_hash: &str) -> AppResult<ApiKey> {
         self.api_key_repository
-            .find_valid_by_hash(key_hash)
+            .get_valid_by_hash(key_hash)
             .await
             .map_err(|e| e.context("Failed to validate API key"))?
             .ok_or_else(|| AppError::not_found("Valid API key not found".to_string()))
@@ -112,7 +112,7 @@ impl ApiKeyService {
 
     pub async fn list_api_keys(&self) -> AppResult<Vec<ApiKey>> {
         self.api_key_repository
-            .list()
+            .get_all()
             .await
             .map_err(|e| e.context("Failed to list API keys"))
     }
@@ -121,6 +121,7 @@ impl ApiKeyService {
         self.api_key_repository
             .delete(id)
             .await
-            .map_err(|e| e.context(format!("Failed to delete API key {}", id)))
+            .map_err(|e| e.context(format!("Failed to delete API key {}", id)))?
+            .ok_or_else(|| AppError::not_found(format!("API key with id {} not found", id)))
     }
 }

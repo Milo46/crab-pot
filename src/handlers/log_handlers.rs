@@ -7,7 +7,8 @@ use uuid::Uuid;
 
 use crate::{
     dto::{
-        CreateLogRequest, CursorLogsResponse, LogEvent, LogResponse, LogsResponse, QueryLogsRequest,
+        common::DeletedResponse, CreateLogRequest, CursorLogsResponse, LogEvent, LogResponse,
+        LogsResponse, QueryLogsRequest,
     },
     error::WithRequestId,
     middleware::RequestId,
@@ -53,7 +54,7 @@ pub async fn delete_log(
     State(state): State<AppState>,
     Path(id): Path<i32>,
     Extension(request_id): Extension<RequestId>,
-) -> AppResult<StatusCode> {
+) -> AppResult<Json<DeletedResponse<LogResponse>>> {
     let deleted_log = state
         .log_service
         .delete_log(id)
@@ -62,9 +63,12 @@ pub async fn delete_log(
 
     let _ = state
         .log_broadcast
-        .send(LogEvent::deleted_from(deleted_log));
+        .send(LogEvent::deleted_from(deleted_log.clone()));
 
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(DeletedResponse {
+        deleted: true,
+        data: LogResponse::from(deleted_log),
+    }))
 }
 
 async fn get_logs_internal(

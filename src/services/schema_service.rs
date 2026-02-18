@@ -260,7 +260,8 @@ impl SchemaService {
             .ok_or_else(|| AppError::not_found(format!("Schema with id '{}' not found", id)))
     }
 
-    pub async fn delete_schema(&self, id: Uuid, force: bool) -> AppResult<bool> {
+    /* TODO(@milo): implement handling transactions by the schema repository just for this function */
+    pub async fn delete_schema(&self, id: Uuid, force: bool) -> AppResult<Schema> {
         if id.is_nil() {
             return Err(AppError::bad_request("Cannot delete Schema with nil UUID"));
         }
@@ -294,7 +295,7 @@ impl SchemaService {
         if force && log_count > 0 {
             let deleted_logs = self
                 .log_repository
-                .delete_by_schema_id(id)
+                .delete_all_by_schema_id(id)
                 .await
                 .map_err(|e| e.context(format!("Failed to delete logs for schema {}", id)))?;
             tracing::info!("Deleted {} logs for schema {}", deleted_logs, id);
@@ -303,7 +304,8 @@ impl SchemaService {
         self.repository
             .delete(id)
             .await
-            .map_err(|e| e.context(format!("Failed to delete schema {}", id)))
+            .map_err(|e| e.context(format!("Failed to delete schema {}", id)))?
+            .ok_or_else(|| AppError::not_found(format!("Schema with id {} not found", id)))
     }
 
     fn validate_schema_definition(&self, schema_definition: &Value) -> AppResult<()> {
