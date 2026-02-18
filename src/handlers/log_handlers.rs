@@ -11,7 +11,8 @@ use crate::{
     },
     error::WithRequestId,
     middleware::RequestId,
-    AppError, AppResult, AppState, QueryParams, SchemaNameVersion,
+    models::query_params::LogQueryParams,
+    AppResult, AppState, SchemaNameVersion,
 };
 
 pub async fn create_log(
@@ -72,30 +73,23 @@ async fn get_logs_internal(
     params: QueryLogsRequest,
     request_id: RequestId,
 ) -> AppResult<Json<LogsResponse>> {
-    if let Some(cursor) = params.cursor {
-        let (logs, cursor_metadata) = state
-            .log_service
-            .get_cursor_logs(schema_id, cursor, params.limit)
-            .await
-            .with_req_id(&request_id)?;
+    let filters = LogQueryParams {
+        date_begin: params.date_begin,
+        date_end: params.date_end,
+        json_filters: params.filters,
+    };
 
-        Ok(Json(LogsResponse::Cursor(CursorLogsResponse::new(
-            schema_id,
-            logs,
-            cursor_metadata,
-        ))))
-    } else {
-        // let query: QueryParams = params.into();
-        // let response = state
-        //     .log_service
-        //     .get_paginated_logs(schema_id, query)
-        //     .await
-        //     .with_req_id(&request_id)?;
+    let (logs, cursor_metadata) = state
+        .log_service
+        .get_cursor_logs(schema_id, params.cursor, params.limit, filters)
+        .await
+        .with_req_id(&request_id)?;
 
-        // Ok(Json(LogsResponse::Paginated(response)))
-
-        Err(AppError::not_found("Unsupported pagination feature"))
-    }
+    Ok(Json(LogsResponse::Cursor(CursorLogsResponse::new(
+        schema_id,
+        logs,
+        cursor_metadata,
+    ))))
 }
 
 pub async fn get_logs(

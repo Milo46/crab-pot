@@ -1,10 +1,8 @@
-use crate::dto::schema_dto::CursorSchemasResponse;
 use crate::dto::CursorMetadata;
 use crate::error::{AppError, AppResult};
 use crate::models::{Schema, SchemaNameVersion, SchemaQueryParams};
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
 use crate::repositories::schema_repository::{SchemaRepository, SchemaRepositoryTrait};
-use crate::SchemaResponse;
 use chrono::Utc;
 use serde_json::Value;
 use std::sync::Arc;
@@ -101,6 +99,7 @@ impl SchemaService {
         &self,
         cursor: Option<Uuid>,
         limit: i32,
+        filters: SchemaQueryParams,
     ) -> AppResult<(Vec<Schema>, CursorMetadata<Uuid>)> {
         if limit <= 0 {
             return Err(AppError::bad_request("Limit must be greater than 0"));
@@ -108,7 +107,7 @@ impl SchemaService {
 
         let mut schemas = self
             .repository
-            .get_all_with_cursor(cursor, limit)
+            .get_all_with_cursor(cursor, limit, filters)
             .await
             .map_err(|e| e.context("Failed to get schemas with cursor feature"))?;
 
@@ -281,7 +280,7 @@ impl SchemaService {
 
         let log_count = self
             .log_repository
-            .count_by_schema_id(id, None, None, None)
+            .count_by_schema_id(id, None)
             .await
             .map_err(|e| e.context(format!("Failed to count logs for schema {}", id)))?;
 

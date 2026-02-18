@@ -1,9 +1,7 @@
-use crate::dto::log_dto::{
-    CursorLogsResponse, LogResponse, PaginatedLogsResponse, PaginationMetadata, TimeWindowMetadata,
-};
 use crate::dto::CursorMetadata;
 use crate::error::AppResult;
-use crate::models::{Log, QueryParams};
+use crate::models::query_params::LogQueryParams;
+use crate::models::Log;
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
 use crate::repositories::schema_repository::{SchemaRepository, SchemaRepositoryTrait};
 use crate::AppError;
@@ -27,17 +25,6 @@ impl LogService {
             log_repository,
             schema_repository,
         }
-    }
-
-    pub async fn get_logs_by_schema_id(
-        &self,
-        schema_id: Uuid,
-        query_params: QueryParams,
-    ) -> AppResult<Vec<Log>> {
-        self.log_repository
-            .get_by_schema_id(schema_id, query_params)
-            .await
-            .map_err(|e| e.context(format!("Failed to get logs for schema {}", schema_id)))
     }
 
     pub async fn get_log_by_id(&self, id: i32) -> AppResult<Log> {
@@ -80,103 +67,20 @@ impl LogService {
     pub async fn count_logs_by_schema_id(
         &self,
         schema_id: Uuid,
-        query_params: &QueryParams,
+        query_params: &LogQueryParams,
     ) -> AppResult<i64> {
         self.log_repository
-            .count_by_schema_id(
-                schema_id,
-                query_params.filters.clone(),
-                query_params.date_begin,
-                query_params.date_end,
-            )
+            .count_by_schema_id(schema_id, Some(query_params))
             .await
             .map_err(|e| e.context(format!("Failed to count logs for schema {}", schema_id)))
     }
 
-    // pub async fn get_paginated_logs(
-    //     &self,
-    //     schema_id: Uuid,
-    //     query_params: QueryParams,
-    // ) -> AppResult<PaginatedLogsResponse> {
-    //     if schema_id.is_nil() {
-    //         return Err(AppError::bad_request("Schema ID cannot be nil"));
-    //     }
-
-    //     let schema_exists = self
-    //         .schema_repository
-    //         .get_by_id(schema_id)
-    //         .await
-    //         .map_err(|e| {
-    //             e.context(format!(
-    //                 "Failed to check schema existence for {}",
-    //                 schema_id
-    //             ))
-    //         })?;
-
-    //     if schema_exists.is_none() {
-    //         return Err(AppError::not_found(format!(
-    //             "Schema with id {} not found",
-    //             schema_id
-    //         )));
-    //     }
-
-    //     let logs = self
-    //         .log_repository
-    //         .get_by_schema_id(schema_id, query_params.clone())
-    //         .await
-    //         .map_err(|e| {
-    //             e.context(format!(
-    //                 "Failed to get paginated logs for schema {}",
-    //                 schema_id
-    //             ))
-    //         })?;
-
-    //     let total = self
-    //         .log_repository
-    //         .count_by_schema_id(
-    //             schema_id,
-    //             query_params.filters.clone(),
-    //             query_params.date_begin,
-    //             query_params.date_end,
-    //         )
-    //         .await
-    //         .map_err(|e| e.context(format!("Failed to count logs for schema {}", schema_id)))?;
-
-    //     let log_responses: Vec<LogResponse> = logs.into_iter().map(LogResponse::from).collect();
-
-    //     let total_pages = if query_params.limit > 0 {
-    //         ((total as f64) / (query_params.limit as f64)).ceil() as i32
-    //     } else {
-    //         0
-    //     };
-
-    //     let timewindow = if query_params.date_begin.is_some() || query_params.date_end.is_some() {
-    //         Some(TimeWindowMetadata {
-    //             date_begin: query_params.date_begin,
-    //             date_end: query_params.date_end,
-    //         })
-    //     } else {
-    //         None
-    //     };
-
-    //     Ok(PaginatedLogsResponse {
-    //         schema_id,
-    //         logs: log_responses,
-    //         timewindow,
-    //         pagination: PaginationMetadata {
-    //             page: query_params.page,
-    //             limit: query_params.limit,
-    //             total,
-    //             total_pages,
-    //         },
-    //     })
-    // }
-
     pub async fn get_cursor_logs(
         &self,
         schema_id: Uuid,
-        cursor: i32,
+        cursor: Option<i32>,
         limit: i32,
+        filters: LogQueryParams,
     ) -> AppResult<(Vec<Log>, CursorMetadata<i32>)> {
         if schema_id.is_nil() {
             return Err(AppError::bad_request("Schema ID cannot be nil"));
@@ -206,7 +110,7 @@ impl LogService {
 
         let mut logs = self
             .log_repository
-            .get_by_schema_id_with_cursor(schema_id, cursor, limit)
+            .get_by_schema_id_with_cursor(schema_id, cursor, limit, filters)
             .await
             .map_err(|e| {
                 e.context(format!(

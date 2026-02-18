@@ -4,7 +4,7 @@ use serde_json::Value;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::{dto::cursor::CursorMetadata, AppError, AppResult, Log, QueryParams};
+use crate::{dto::cursor::CursorMetadata, AppError, AppResult, Log};
 
 fn validate_string_not_empty(string: &String) -> Result<(), validator::ValidationError> {
     if string.trim().is_empty() {
@@ -121,39 +121,30 @@ impl From<Log> for LogResponse {
     }
 }
 
-fn default_page() -> i32 {
-    1
-}
-
 fn default_limit() -> i32 {
     10
 }
 
 #[derive(Debug, Deserialize)]
 pub struct QueryLogsRequest {
-    #[serde(default = "default_page")]
-    pub page: i32,
-    #[serde(default = "default_limit")]
-    pub limit: i32,
-
-    pub cursor: Option<i32>,
-
     pub date_begin: Option<DateTime<Utc>>,
     pub date_end: Option<DateTime<Utc>>,
     pub filters: Option<Value>,
+    pub cursor: Option<i32>,
+    #[serde(default = "default_limit")]
+    pub limit: i32,
 }
 
-impl From<QueryLogsRequest> for QueryParams {
-    fn from(req: QueryLogsRequest) -> Self {
-        Self {
-            page: req.page,
-            limit: req.limit,
-            date_begin: req.date_begin,
-            date_end: req.date_end,
-            filters: req.filters,
-        }
-    }
-}
+// impl From<QueryLogsRequest> for QueryParams {
+//     fn from(req: QueryLogsRequest) -> Self {
+//         Self {
+//             limit: req.limit,
+//             date_begin: req.date_begin,
+//             date_end: req.date_end,
+//             filters: req.filters,
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event_type", rename_all = "lowercase")]

@@ -38,7 +38,7 @@ use crate::{
 pub use dto::{LogEvent, PaginatedLogsResponse, PaginationMetadata, SchemaResponse};
 pub use error::{AppError, AppResult};
 pub use middleware::request_id::{RequestIdLayer, RequestIdMakeSpan};
-pub use models::{Log, QueryParams, Schema, SchemaNameVersion};
+pub use models::{Log, Schema, SchemaNameVersion};
 pub use repositories::{ApiKeyRepository, LogRepository, SchemaRepository};
 pub use services::{ApiKeyService, LogService, SchemaService};
 

@@ -97,12 +97,17 @@ impl CursorSchemasResponse {
     }
 }
 
+fn default_limit() -> i32 {
+    10
+}
+
 #[derive(Debug, Deserialize)]
 pub struct GetSchemasQuery {
     pub name: Option<String>,
     pub version: Option<String>,
     pub cursor: Option<Uuid>,
-    pub limit: Option<i32>,
+    #[serde(default = "default_limit")]
+    pub limit: i32,
 }
 
 #[derive(Debug, Deserialize)]

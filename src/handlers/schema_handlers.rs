@@ -9,8 +9,8 @@ use validator::Validate;
 
 use crate::{
     dto::{
-        schema_dto::CursorSchemasResponse, CreateSchemaRequest, CursorMetadata, DeleteSchemaQuery,
-        GetSchemasQuery, SchemaResponse, UpdateSchemaRequest,
+        schema_dto::CursorSchemasResponse, CreateSchemaRequest, DeleteSchemaQuery, GetSchemasQuery,
+        SchemaResponse, UpdateSchemaRequest,
     },
     error::WithRequestId,
     middleware::RequestId,
@@ -23,36 +23,14 @@ pub async fn get_schemas(
     Query(query): Query<GetSchemasQuery>,
     Extension(request_id): Extension<RequestId>,
 ) -> AppResult<Json<CursorSchemasResponse>> {
-    if query.name.is_some() || query.version.is_some() {
-        let repo_params = SchemaQueryParams {
-            name: query.name,
-            version: query.version,
-        };
+    let filters = SchemaQueryParams {
+        name: query.name,
+        version: query.version,
+    };
 
-        let schemas = state
-            .schema_service
-            .get_all_schemas(Some(repo_params))
-            .await
-            .with_req_id(&request_id)?;
-
-        let schemas_response: Vec<SchemaResponse> =
-            schemas.into_iter().map(SchemaResponse::from).collect();
-
-        return Ok(Json(CursorSchemasResponse {
-            schemas: schemas_response,
-            cursor: CursorMetadata::<Uuid> {
-                limit: 0,
-                next_cursor: None,
-                prev_cursor: None,
-                has_more: false,
-            },
-        }));
-    }
-
-    let limit = query.limit.unwrap_or(10);
     let (schemas, cursor_metadata) = state
         .schema_service
-        .get_cursor_schemas(query.cursor, limit)
+        .get_cursor_schemas(query.cursor, query.limit, filters)
         .await
         .with_req_id(&request_id)?;
 

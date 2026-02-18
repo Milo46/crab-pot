@@ -1,9 +1,48 @@
-use chrono::{DateTime, Utc};
-use serde_json::Value;
 use sqlx::{Postgres, QueryBuilder};
 use uuid::Uuid;
 
-use crate::models::SchemaQueryParams;
+use crate::models::{query_params::LogQueryParams, SchemaQueryParams};
+
+macro_rules! impl_common_builder_methods {
+    ($builder:ty) => {
+        impl<'a> $builder {
+            fn add_condition(&mut self) {
+                if !self.conditions_added {
+                    self.query.push(" WHERE ");
+                    self.conditions_added = true;
+                } else {
+                    self.query.push(" AND ");
+                }
+            }
+
+            pub fn order_by(mut self, column: &str, direction: &str) -> Self {
+                self.query.push(" ORDER BY ");
+                self.query.push(column);
+                self.query.push(" ");
+                self.query.push(direction);
+                self
+            }
+
+            pub fn then_order_by(mut self, column: &str, direction: &str) -> Self {
+                self.query.push(", ");
+                self.query.push(column);
+                self.query.push(" ");
+                self.query.push(direction);
+                self
+            }
+
+            pub fn limit(mut self, limit: i32) -> Self {
+                self.query.push(" LIMIT ");
+                self.query.push_bind(limit);
+                self
+            }
+
+            pub fn build(self) -> QueryBuilder<'a, Postgres> {
+                self.query
+            }
+        }
+    };
+}
 
 pub struct SchemaQueryBuilder<'a> {
     query: QueryBuilder<'a, Postgres>,
@@ -16,15 +55,6 @@ impl<'a> SchemaQueryBuilder<'a> {
         Self {
             query,
             conditions_added: false,
-        }
-    }
-
-    fn add_condition(&mut self) {
-        if !self.conditions_added {
-            self.query.push(" WHERE ");
-            self.conditions_added = true;
-        } else {
-            self.query.push(" AND ");
         }
     }
 
@@ -44,18 +74,22 @@ impl<'a> SchemaQueryBuilder<'a> {
         self
     }
 
-    pub fn order_by(mut self, column: &str, direction: &str) -> Self {
-        self.query.push(" ORDER BY ");
-        self.query.push(column);
-        self.query.push(" ");
-        self.query.push(direction);
+    pub fn cursor(mut self, cursor_id: Uuid) -> Self {
+        self.add_condition();
+        self.query
+            .push("(created_at < (SELECT created_at FROM schemas WHERE id = ");
+        self.query.push_bind(cursor_id);
+        self.query
+            .push(") OR (created_at = (SELECT created_at FROM schemas WHERE id = ");
+        self.query.push_bind(cursor_id);
+        self.query.push(") AND id < ");
+        self.query.push_bind(cursor_id);
+        self.query.push("))");
         self
     }
-
-    pub fn build(self) -> QueryBuilder<'a, Postgres> {
-        self.query
-    }
 }
+
+impl_common_builder_methods!(SchemaQueryBuilder<'a>);
 
 pub struct LogQueryBuilder<'a> {
     query: QueryBuilder<'a, Postgres>,
@@ -79,15 +113,6 @@ impl<'a> LogQueryBuilder<'a> {
         }
     }
 
-    fn add_condition(&mut self) {
-        if !self.conditions_added {
-            self.query.push(" WHERE ");
-            self.conditions_added = true;
-        } else {
-            self.query.push(" AND ");
-        }
-    }
-
     pub fn schema_id(mut self, schema_id: Uuid) -> Self {
         self.add_condition();
         self.query.push("schema_id = ");
@@ -95,37 +120,39 @@ impl<'a> LogQueryBuilder<'a> {
         self
     }
 
-    pub fn filters(mut self, filters: Option<&'a Value>) -> Self {
-        if let Some(filter_value) = filters {
-            if filter_value.as_object().is_some() {
+    pub fn filters(mut self, params: Option<&'a LogQueryParams>) -> Self {
+        if let Some(query_params) = params {
+            if let Some(filter_value) = &query_params.json_filters {
+                if filter_value.as_object().is_some() {
+                    self.add_condition();
+                    self.query.push("log_data @> ");
+                    self.query.push_bind(filter_value);
+                }
+            }
+            if let (Some(begin), Some(end)) = (query_params.date_begin, query_params.date_end) {
                 self.add_condition();
-                self.query.push("log_data @> ");
-                self.query.push_bind(filter_value);
+                self.query.push("created_at BETWEEN ");
+                self.query.push_bind(begin);
+                self.query.push(" AND ");
+                self.query.push_bind(end);
             }
         }
         self
     }
 
-    pub fn date_range(
-        mut self,
-        date_begin: Option<DateTime<Utc>>,
-        date_end: Option<DateTime<Utc>>,
-    ) -> Self {
-        if let (Some(begin), Some(end)) = (date_begin, date_end) {
+    pub fn cursor(mut self, cursor_id: Option<i32>) -> Self {
+        if let Some(id) = cursor_id {
             self.add_condition();
-            self.query.push("created_at BETWEEN ");
-            self.query.push_bind(begin);
-            self.query.push(" AND ");
-            self.query.push_bind(end);
+            self.query
+                .push("(created_at < (SELECT created_at FROM logs WHERE id = ");
+            self.query.push_bind(cursor_id);
+            self.query
+                .push(") OR (created_at = (SELECT created_at FROM logs WHERE id = ");
+            self.query.push_bind(cursor_id);
+            self.query.push(") AND id < ");
+            self.query.push_bind(cursor_id);
+            self.query.push("))");
         }
-        self
-    }
-
-    pub fn order_by(mut self, column: &str, direction: &str) -> Self {
-        self.query.push(" ORDER BY ");
-        self.query.push(column);
-        self.query.push(" ");
-        self.query.push(direction);
         self
     }
 
@@ -137,8 +164,6 @@ impl<'a> LogQueryBuilder<'a> {
         self.query.push_bind(offset);
         self
     }
-
-    pub fn build(self) -> QueryBuilder<'a, Postgres> {
-        self.query
-    }
 }
+
+impl_common_builder_methods!(LogQueryBuilder<'a>);

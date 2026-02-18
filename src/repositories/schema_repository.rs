@@ -8,8 +8,12 @@ use uuid::Uuid;
 #[async_trait]
 pub trait SchemaRepositoryTrait {
     async fn get_all(&self, params: Option<SchemaQueryParams>) -> AppResult<Vec<Schema>>;
-    async fn get_all_with_cursor(&self, cursor: Option<Uuid>, limit: i32)
-        -> AppResult<Vec<Schema>>;
+    async fn get_all_with_cursor(
+        &self,
+        cursor: Option<Uuid>,
+        limit: i32,
+        filters: SchemaQueryParams,
+    ) -> AppResult<Vec<Schema>>;
     async fn get_by_id(&self, id: Uuid) -> AppResult<Option<Schema>>;
     async fn get_by_name_latest(&self, name: &str) -> AppResult<Option<Schema>>;
     async fn get_by_name_and_version(&self, name: &str, version: &str)
@@ -49,38 +53,24 @@ impl SchemaRepositoryTrait for SchemaRepository {
         &self,
         cursor: Option<Uuid>,
         limit: i32,
+        filters: SchemaQueryParams,
     ) -> AppResult<Vec<Schema>> {
         let fetch_limit = limit + 1;
 
-        let schemas = match cursor {
-            Some(cursor_id) => {
-                sqlx::query_as::<_, Schema>(
-                    r#"
-                    SELECT s.* FROM schemas s
-                    WHERE s.created_at < (SELECT created_at FROM schemas WHERE id = $1)
-                       OR (s.created_at = (SELECT created_at FROM schemas WHERE id = $1) AND s.id < $1)
-                    ORDER BY s.created_at DESC, s.id DESC
-                    LIMIT $2
-                    "#,
-                )
-                .bind(cursor_id)
-                .bind(fetch_limit)
-                .fetch_all(&self.pool)
-                .await?
-            }
-            None => {
-                sqlx::query_as::<_, Schema>(
-                    r#"
-                    SELECT * FROM schemas
-                    ORDER BY created_at DESC, id DESC
-                    LIMIT $1
-                    "#,
-                )
-                .bind(fetch_limit)
-                .fetch_all(&self.pool)
-                .await?
-            }
-        };
+        let mut builder = SchemaQueryBuilder::select().filters(Some(&filters));
+
+        if let Some(cursor_id) = cursor {
+            builder = builder.cursor(cursor_id);
+        }
+
+        let schemas = builder
+            .order_by("created_at", "DESC")
+            .then_order_by("id", "DESC")
+            .limit(fetch_limit)
+            .build()
+            .build_query_as::<Schema>()
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(schemas)
     }
