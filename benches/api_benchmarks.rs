@@ -2,8 +2,8 @@ use criterion::{
     black_box, criterion_group, criterion_main, AxisScale, Criterion, PlotConfiguration,
 };
 use log_server::{
-    create_app, ApiKeyRepository, ApiKeyService, AppState, LogRepository, LogService,
-    SchemaRepository, SchemaResponse, SchemaService,
+    create_app, middleware::RateLimiter, ApiKeyRepository, ApiKeyService, AppState, LogRepository,
+    LogService, SchemaRepository, SchemaResponse, SchemaService,
 };
 use reqwest::Client;
 use sqlx::{Pool, Postgres};
@@ -81,11 +81,14 @@ async fn setup_benchmark_app() -> BenchmarkApp {
 
     let (tx, _) = broadcast::channel(16);
 
+    let rate_limiter = Arc::new(RateLimiter::new());
+
     let app_state = AppState {
         schema_service,
         log_service,
         api_key_service,
         log_broadcast: tx,
+        rate_limiter,
     };
 
     let app = create_app(app_state, pool.clone());

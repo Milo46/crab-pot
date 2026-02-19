@@ -1,6 +1,6 @@
 use log_server::{
-    create_admin_app, create_app, ApiKeyRepository, ApiKeyService, AppState, LogRepository,
-    LogService, SchemaRepository, SchemaService,
+    create_admin_app, create_app, middleware::RateLimiter, ApiKeyRepository, ApiKeyService,
+    AppState, LogRepository, LogService, SchemaRepository, SchemaService,
 };
 use reqwest::{Client, Method, RequestBuilder};
 use sqlx::{Pool, Postgres};
@@ -159,11 +159,14 @@ pub async fn setup_test_app() -> TestApp {
 
     let (tx, _) = broadcast::channel(16);
 
+    let rate_limiter = Arc::new(RateLimiter::new());
+
     let app_state = AppState {
         schema_service,
         log_service,
         api_key_service,
         log_broadcast: tx,
+        rate_limiter,
     };
 
     let app = create_app(app_state, pool.clone());
@@ -244,11 +247,14 @@ pub async fn setup_admin_test_app() -> AdminTestApp {
 
     let (tx, _) = broadcast::channel(16);
 
+    let rate_limiter = Arc::new(RateLimiter::new());
+
     let app_state = AppState {
         schema_service,
         log_service,
         api_key_service,
         log_broadcast: tx,
+        rate_limiter,
     };
 
     let admin_app = create_admin_app(app_state);
