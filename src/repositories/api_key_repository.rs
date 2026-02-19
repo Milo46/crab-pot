@@ -4,7 +4,8 @@ use crate::{models::ApiKey, AppResult};
 
 const API_KEY_COLUMNS: &str = r#"
     id, key_hash, key_prefix, name, description, created_at,
-    last_used_at, expires_at, is_active, usage_count, allowed_ips
+    last_used_at, expires_at, is_active, usage_count, allowed_ips,
+    rate_limit_per_second, rate_limit_burst
 "#;
 
 pub struct ApiKeyRepository {
@@ -64,13 +65,16 @@ impl ApiKeyRepository {
         description: Option<&str>,
         expires_at: Option<chrono::DateTime<chrono::Utc>>,
         allowed_ips: Option<Vec<std::net::IpAddr>>,
+        rate_limit_per_second: Option<i32>,
+        rate_limit_burst: Option<i32>,
     ) -> AppResult<ApiKey> {
         let api_key = sqlx::query_as::<_, ApiKey>(
             r#"
-            INSERT INTO api_keys (key_hash, key_prefix, name, description, expires_at, allowed_ips)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO api_keys (key_hash, key_prefix, name, description, expires_at, allowed_ips, rate_limit_per_second, rate_limit_burst)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id, key_hash, key_prefix, name, description, created_at, 
-                      last_used_at, expires_at, is_active, usage_count, allowed_ips
+                      last_used_at, expires_at, is_active, usage_count, allowed_ips,
+                      rate_limit_per_second, rate_limit_burst
             "#,
         )
         .bind(&key_hash)
@@ -79,6 +83,8 @@ impl ApiKeyRepository {
         .bind(description)
         .bind(expires_at)
         .bind(allowed_ips)
+        .bind(rate_limit_per_second)
+        .bind(rate_limit_burst)
         .fetch_one(&self.pool)
         .await?;
 
@@ -123,7 +129,8 @@ impl ApiKeyRepository {
                 key_prefix = $3
             WHERE id = $1
             RETURNING id, key_hash, key_prefix, name, description, created_at, 
-                      last_used_at, expires_at, is_active, usage_count, allowed_ips
+                      last_used_at, expires_at, is_active, usage_count, allowed_ips,
+                      rate_limit_per_second, rate_limit_burst
             "#,
         )
         .bind(key_id)
@@ -139,7 +146,8 @@ impl ApiKeyRepository {
         let api_keys = sqlx::query_as::<_, ApiKey>(
             r#"
             SELECT id, key_hash, key_prefix, name, description, created_at, 
-                   last_used_at, expires_at, is_active, usage_count, allowed_ips
+                   last_used_at, expires_at, is_active, usage_count, allowed_ips,
+                   rate_limit_per_second, rate_limit_burst
             FROM api_keys 
             ORDER BY created_at DESC
             "#,
@@ -154,7 +162,8 @@ impl ApiKeyRepository {
         let expired_active_api_keys = sqlx::query_as::<_, ApiKey>(
             r#"
             SELECT id, key_hash, key_prefix, name, description, created_at, 
-                   last_used_at, expires_at, is_active, usage_count, allowed_ips
+                   last_used_at, expires_at, is_active, usage_count, allowed_ips,
+                   rate_limit_per_second, rate_limit_burst
             FROM api_keys 
             WHERE is_active = true 
                 AND expires_at IS NOT NULL 
@@ -173,7 +182,8 @@ impl ApiKeyRepository {
             DELETE FROM api_keys 
             WHERE id = $1
             RETURNING id, key_hash, key_prefix, name, description, created_at, 
-                      last_used_at, expires_at, is_active, usage_count, allowed_ips
+                      last_used_at, expires_at, is_active, usage_count, allowed_ips,
+                      rate_limit_per_second, rate_limit_burst
             "#,
         )
         .bind(id)

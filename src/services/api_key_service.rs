@@ -58,6 +58,8 @@ impl ApiKeyService {
                 request.description.as_deref(),
                 request.expires_at,
                 allowed_ips,
+                request.rate_limit_per_second,
+                request.rate_limit_burst,
             )
             .await
             .map_err(|e| e.context("Failed to create API key"))?;

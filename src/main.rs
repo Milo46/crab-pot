@@ -1,6 +1,6 @@
 use log_server::{
-    create_admin_app, create_app, ApiKeyRepository, ApiKeyService, AppState, Config, LogRepository,
-    LogService, SchemaRepository, SchemaService,
+    create_admin_app, create_app, middleware::RateLimiter, ApiKeyRepository, ApiKeyService, 
+    AppState, Config, LogRepository, LogService, SchemaRepository, SchemaService,
 };
 use std::net::SocketAddr;
 use std::{env, sync::Arc};
@@ -41,12 +41,15 @@ async fn main() -> anyhow::Result<()> {
     let api_key_service = Arc::new(ApiKeyService::new(api_key_repository.clone()));
 
     let (log_broadcast_tx, _) = broadcast::channel(config.broadcast_channel_size);
+    
+    let rate_limiter = Arc::new(RateLimiter::new());
 
     let app_state = AppState {
         schema_service,
         log_service,
         api_key_service,
         log_broadcast: log_broadcast_tx,
+        rate_limiter,
     };
 
     let app = create_app(app_state.clone(), pool);

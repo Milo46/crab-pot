@@ -17,6 +17,8 @@ pub struct ApiKeyResponse {
     pub is_active: bool,
     pub allowed_ips: Option<Vec<IpNetwork>>,
     pub usage_count: Option<i64>,
+    pub rate_limit_per_second: Option<i32>,
+    pub rate_limit_burst: Option<i32>,
 }
 
 impl From<ApiKey> for ApiKeyResponse {
@@ -32,6 +34,8 @@ impl From<ApiKey> for ApiKeyResponse {
             is_active: value.is_active,
             allowed_ips: value.allowed_ips,
             usage_count: value.usage_count,
+            rate_limit_per_second: value.rate_limit_per_second,
+            rate_limit_burst: value.rate_limit_burst,
         }
     }
 }
@@ -56,6 +60,10 @@ pub struct CreateApiKeyRequest {
     pub description: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub allowed_ips: Option<Vec<IpNetwork>>,
+    #[validate(range(min = 1, max = 10000, message = "Rate limit must be between 1 and 10000"))]
+    pub rate_limit_per_second: Option<i32>,
+    #[validate(range(min = 1, max = 20000, message = "Burst limit must be between 1 and 20000"))]
+    pub rate_limit_burst: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

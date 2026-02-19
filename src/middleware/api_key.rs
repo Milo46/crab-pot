@@ -2,9 +2,9 @@ use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
     extract::{ConnectInfo, Request, State},
-    http::StatusCode,
+    http::{StatusCode, header::{HeaderName, HeaderValue}},
     middleware::Next,
-    response::Response,
+    response::{Response, IntoResponse},
 };
 
 use crate::{services::api_key_service::ApiKeyService, AppState};
@@ -38,12 +38,69 @@ pub async fn api_key_middleware(
         return Err(StatusCode::FORBIDDEN);
     }
 
+    let rate_limit_per_second = api_key.rate_limit_per_second.unwrap_or(10) as u32;
+    let rate_limit_burst = api_key.rate_limit_burst.unwrap_or(20) as u32;
+    
+    if let Err(err) = app_state.rate_limiter.check_rate_limit(
+        &key_hash,
+        rate_limit_per_second,
+        rate_limit_burst,
+    ) {
+        tracing::warn!(
+            "Rate limit exceeded for key: {} - {}",
+            api_key.display_key(),
+            err
+        );
+        
+        // Create 429 response with rate limit headers
+        let mut response = StatusCode::TOO_MANY_REQUESTS.into_response();
+        let headers = response.headers_mut();
+        headers.insert(
+            HeaderName::from_static("x-ratelimit-limit"),
+            HeaderValue::from(err.limit),
+        );
+        headers.insert(
+            HeaderName::from_static("x-ratelimit-remaining"),
+            HeaderValue::from(err.remaining),
+        );
+        headers.insert(
+            HeaderName::from_static("retry-after"),
+            HeaderValue::from(err.retry_after),
+        );
+        return Ok(response);
+    }
+    
+    // Get rate limit status for response headers
+    let rate_limit_status = app_state.rate_limiter.get_status(
+        &key_hash,
+        rate_limit_per_second,
+        rate_limit_burst,
+    );
+
     tokio::spawn(async move {
         let _ = app_state.api_key_service.update_usage(&key_hash).await;
     });
 
     request.extensions_mut().insert(Arc::new(api_key));
-    Ok(next.run(request).await)
+    
+    let mut response = next.run(request).await;
+    
+    // Add rate limit headers to all responses
+    let headers = response.headers_mut();
+    headers.insert(
+        HeaderName::from_static("x-ratelimit-limit"),
+        HeaderValue::from(rate_limit_status.limit),
+    );
+    headers.insert(
+        HeaderName::from_static("x-ratelimit-remaining"),
+        HeaderValue::from(rate_limit_status.remaining),
+    );
+    headers.insert(
+        HeaderName::from_static("x-ratelimit-reset"),
+        HeaderValue::from(rate_limit_status.reset_in_secs),
+    );
+    
+    Ok(response)
 }
 
 // pub async fn api_key_middleware_debug(
