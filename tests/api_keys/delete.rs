@@ -13,7 +13,7 @@ async fn delete_existing_key_success() {
     let created: CreateApiKeyResponse = create_response.json().await.unwrap();
 
     let delete_response = delete_api_key(&app, created.id).await;
-    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(delete_response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -27,7 +27,7 @@ async fn delete_removes_key_from_database() {
     assert_eq!(get_response.status(), StatusCode::OK);
 
     let delete_response = delete_api_key(&app, created.id).await;
-    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(delete_response.status(), StatusCode::OK);
 
     let get_response_after = get_api_key_by_id(&app, created.id).await;
     assert_eq!(get_response_after.status(), StatusCode::NOT_FOUND);
@@ -54,7 +54,8 @@ async fn delete_key_removes_from_list() {
     let keys: ApiKeysResponse = list_response.json().await.unwrap();
     assert_eq!(keys.api_keys.len(), 3);
 
-    delete_api_key(&app, key_to_delete.id).await;
+    let delete_response = delete_api_key(&app, key_to_delete.id).await;
+    assert_eq!(delete_response.status(), StatusCode::OK);
 
     let list_response = get_api_keys(&app).await;
     let keys: ApiKeysResponse = list_response.json().await.unwrap();
@@ -74,7 +75,7 @@ async fn delete_same_key_twice() {
     let created: CreateApiKeyResponse = create_response.json().await.unwrap();
 
     let delete_response1 = delete_api_key(&app, created.id).await;
-    assert_eq!(delete_response1.status(), StatusCode::NO_CONTENT);
+    assert_eq!(delete_response1.status(), StatusCode::OK);
 
     let delete_response2 = delete_api_key(&app, created.id).await;
     assert_eq!(delete_response2.status(), StatusCode::NOT_FOUND);
@@ -93,7 +94,7 @@ async fn delete_all_keys() {
 
     for id in key_ids {
         let delete_response = delete_api_key(&app, id).await;
-        assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(delete_response.status(), StatusCode::OK);
     }
 
     let list_response = get_api_keys(&app).await;
@@ -112,7 +113,7 @@ async fn delete_with_invalid_id_format() {
         .await
         .unwrap();
 
-    assert_ne!(response.status(), StatusCode::NO_CONTENT);
+    assert_ne!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]

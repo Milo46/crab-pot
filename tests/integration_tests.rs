@@ -1,6 +1,7 @@
 mod api_keys;
 mod common;
 mod logs;
+mod rate_limiting;
 mod schemas;
 
 mod health {

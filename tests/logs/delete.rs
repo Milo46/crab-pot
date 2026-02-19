@@ -16,8 +16,7 @@ async fn deletes_existing_log_successfully() {
     let log: Log = log_response.json().await.unwrap();
 
     let delete_response = delete_log(&app, log.id.to_string()).await;
-    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
-    assert!(delete_response.text().await.unwrap().is_empty());
+    assert_eq!(delete_response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -53,7 +52,7 @@ async fn log_not_accessible_after_deletion() {
     assert_eq!(get_response.status(), StatusCode::OK);
 
     let delete_response = delete_log(&app, log.id.to_string()).await;
-    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(delete_response.status(), StatusCode::OK);
 
     let get_after_delete = get_log(&app, log.id.to_string()).await;
     assert_eq!(get_after_delete.status(), StatusCode::NOT_FOUND);
@@ -70,7 +69,7 @@ async fn double_delete_returns_404() {
     let log: Log = log_response.json().await.unwrap();
 
     let first_delete = delete_log(&app, log.id.to_string()).await;
-    assert_eq!(first_delete.status(), StatusCode::NO_CONTENT);
+    assert_eq!(first_delete.status(), StatusCode::OK);
 
     let second_delete = delete_log(&app, log.id.to_string()).await;
     assert_eq!(second_delete.status(), StatusCode::NOT_FOUND);

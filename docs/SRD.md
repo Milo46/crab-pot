@@ -166,7 +166,10 @@ This section defines the functional requirements using testable, verifiable stat
 | FR-611 | The system SHALL check API key expiration before allowing requests | Must |
 | FR-612 | The system SHALL enforce IP address restrictions when configured | Should |
 | FR-613 | The system SHALL track API key usage (last_used_at, usage_count) | Should |
-| FR-614 | The Admin API SHALL be bound to localhost by default for security | Must |
+| FR-614 | The system SHALL enforce per-API-key rate limits | Must |
+| FR-615 | The system SHALL return rate limit headers on all responses | Should |
+| FR-616 | The system SHALL support configurable rate limits per API key | Should |
+| FR-617 | The Admin API SHALL be bound to localhost by default for security | Must |
 | FR-507 | The system SHALL return appropriate HTTP status codes for all error conditions | Must |
 | FR-508 | The system SHALL return descriptive error messages in a consistent JSON format | Must |
 

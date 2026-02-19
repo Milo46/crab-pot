@@ -20,6 +20,8 @@ pub struct ApiKey {
     pub usage_count: Option<i64>,
     #[sqlx(default)]
     pub allowed_ips: Option<Vec<IpNetwork>>,
+    pub rate_limit_per_second: Option<i32>,
+    pub rate_limit_burst: Option<i32>,
 }
 
 impl ApiKey {
@@ -54,6 +56,8 @@ pub struct CreateApiKey {
     pub description: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub allowed_ips: Option<Vec<IpNetwork>>,
+    pub rate_limit_per_second: Option<i32>,
+    pub rate_limit_burst: Option<i32>,
 }
 
 impl CreateApiKey {
@@ -63,6 +67,8 @@ impl CreateApiKey {
             description: None,
             expires_at: None,
             allowed_ips: None,
+            rate_limit_per_second: None,
+            rate_limit_burst: None,
         }
     }
 }
@@ -74,6 +80,8 @@ impl From<CreateApiKeyRequest> for CreateApiKey {
             description: value.description,
             expires_at: value.expires_at,
             allowed_ips: value.allowed_ips,
+            rate_limit_per_second: value.rate_limit_per_second,
+            rate_limit_burst: value.rate_limit_burst,
         }
     }
 }

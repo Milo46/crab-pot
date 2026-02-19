@@ -1,6 +1,6 @@
 use log_server::{
-    create_admin_app, create_app, ApiKeyRepository, ApiKeyService, AppState, LogRepository,
-    LogService, SchemaRepository, SchemaService,
+    create_admin_app, create_app, middleware::RateLimiter, ApiKeyRepository, ApiKeyService,
+    AppState, LogRepository, LogService, SchemaRepository, SchemaService,
 };
 use reqwest::{Client, Method, RequestBuilder};
 use sqlx::{Pool, Postgres};
@@ -17,6 +17,7 @@ pub struct TestApp {
     pub client: Client,
     #[allow(unused)]
     pub db_pool: Pool<Postgres>,
+    pub api_key_service: Arc<ApiKeyService>,
     api_key: String,
     _container: ContainerAsync<postgres::Postgres>,
 }
@@ -30,12 +31,43 @@ pub struct AdminTestApp {
 }
 
 impl TestApp {
+    pub async fn spawn() -> Self {
+        setup_test_app().await
+    }
+
     pub fn auth(&self) -> AuthClient<'_> {
         AuthClient { app: self }
+    }
+
+    pub async fn create_api_key_with_limits(
+        &self,
+        rate_limit_per_second: i32,
+        rate_limit_burst: i32,
+    ) -> String {
+        let create_request = log_server::models::CreateApiKey {
+            name: format!("Test Key (limit: {}/s)", rate_limit_per_second),
+            description: None,
+            expires_at: None,
+            allowed_ips: None,
+            rate_limit_per_second: Some(rate_limit_per_second),
+            rate_limit_burst: Some(rate_limit_burst),
+        };
+
+        let created_key = self
+            .api_key_service
+            .create_api_key(create_request)
+            .await
+            .expect("Failed to create test API key with limits");
+
+        created_key.plain_key
     }
 }
 
 impl AdminTestApp {
+    pub async fn spawn() -> Self {
+        setup_admin_test_app().await
+    }
+
     pub fn client(&self) -> AdminClient<'_> {
         AdminClient { app: self }
     }
@@ -159,11 +191,14 @@ pub async fn setup_test_app() -> TestApp {
 
     let (tx, _) = broadcast::channel(16);
 
+    let rate_limiter = Arc::new(RateLimiter::new());
+
     let app_state = AppState {
         schema_service,
         log_service,
-        api_key_service,
+        api_key_service: api_key_service.clone(),
         log_broadcast: tx,
+        rate_limiter,
     };
 
     let app = create_app(app_state, pool.clone());
@@ -190,6 +225,7 @@ pub async fn setup_test_app() -> TestApp {
         address: address_str,
         client,
         db_pool: pool,
+        api_key_service,
         api_key: test_api_key.plain_key,
         _container: container,
     }
@@ -244,11 +280,14 @@ pub async fn setup_admin_test_app() -> AdminTestApp {
 
     let (tx, _) = broadcast::channel(16);
 
+    let rate_limiter = Arc::new(RateLimiter::new());
+
     let app_state = AppState {
         schema_service,
         log_service,
         api_key_service,
         log_broadcast: tx,
+        rate_limiter,
     };
 
     let admin_app = create_admin_app(app_state);

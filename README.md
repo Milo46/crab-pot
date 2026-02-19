@@ -23,6 +23,19 @@ via HTTP and data events via WebSocket also.
 - ✅ Simple HTTP API — Easy to integrate with any system
 - ✅ Data Integrity — Every log is validated against its schema
 - ✅ Live data updates - Every log write/deletion is now being pushed via WebSocket
+- ✅ Rate Limiting - Per API key custom rate limiting feature
+
+## API Key Rate Limiting
+
+Each API key has configurable rate limits:
+- `rate_limit_per_second` - Base rate (default: 10 req/s)
+- `rate_limit_burst` - Burst capacity (default: 2x base rate)
+
+Rate limit headers are returned on all requests:
+- `X-RateLimit-Limit` - Your burst capacity
+- `X-RateLimit-Remaining` - Requests remaining
+- `X-RateLimit-Reset` - Seconds until reset
+- `Retry-After` - When rate limited (429 response)
 
 ## Prerequisites
 - Docker and Docker Compose installed

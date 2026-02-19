@@ -50,6 +50,7 @@ pub struct AppState {
     pub log_service: Arc<LogService>,
     pub api_key_service: Arc<ApiKeyService>,
     pub log_broadcast: broadcast::Sender<LogEvent>,
+    pub rate_limiter: Arc<middleware::RateLimiter>,
 }
 
 impl AppState {
@@ -58,12 +59,14 @@ impl AppState {
         log_service: Arc<LogService>,
         api_key_service: Arc<ApiKeyService>,
         log_broadcast: broadcast::Sender<LogEvent>,
+        rate_limiter: Arc<middleware::RateLimiter>,
     ) -> Self {
         Self {
             schema_service,
             log_service,
             api_key_service,
             log_broadcast,
+            rate_limiter,
         }
     }
 }

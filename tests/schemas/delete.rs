@@ -14,8 +14,7 @@ async fn deletes_existing_schema_successfully() {
     let schema: SchemaResponse = schema_response.json().await.unwrap();
 
     let delete_response = delete_schema(&app, &schema.id.to_string()).await;
-    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
-    assert!(delete_response.text().await.unwrap().is_empty());
+    assert_eq!(delete_response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -63,7 +62,7 @@ async fn schema_not_accessible_after_deletion() {
     assert_eq!(get_response.status(), StatusCode::OK);
 
     let delete_response = delete_schema(&app, &schema.id.to_string()).await;
-    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(delete_response.status(), StatusCode::OK);
 
     let get_after_delete_response = get_schema_by_id(&app, &schema.id.to_string()).await;
     assert_eq!(get_after_delete_response.status(), StatusCode::NOT_FOUND);

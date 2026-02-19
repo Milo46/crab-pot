@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS api_keys (
     expires_at TIMESTAMPTZ,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     allowed_ips INET[],
-    usage_count BIGINT DEFAULT 0
+    usage_count BIGINT DEFAULT 0,
+    rate_limit_per_second INT DEFAULT 10,
+    rate_limit_burst INT DEFAULT 20
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash);
