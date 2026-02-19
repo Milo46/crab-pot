@@ -70,7 +70,7 @@ async fn setup_benchmark_app() -> BenchmarkApp {
     let api_key_repo = Arc::new(ApiKeyRepository::new(pool.clone()));
 
     let schema_service = Arc::new(SchemaService::new(schema_repo.clone(), log_repo.clone()));
-    let log_service = Arc::new(LogService::new(log_repo.clone(), schema_repo.clone()));
+    let log_service = Arc::new(LogService::new(log_repo.clone(), schema_service.clone()));
     let api_key_service = Arc::new(ApiKeyService::new(api_key_repo.clone()));
 
     let create_api_key_request = log_server::models::CreateApiKey::new("Benchmark API Key");
