@@ -7,42 +7,83 @@ info:
     is designed for centralized logging in development environments and microservice architectures.
     
     ## Features
-    - User-defined JSON schemas for log validation
-    - Schema-validated log entry storage
-    - PostgreSQL persistent storage with JSONB support
-    - Filtering and pagination support
-    - Health monitoring endpoint
-    - Docker Compose deployment ready
+    - User-defined JSON schemas for log validation (JSON Schema Draft 7)
+    - Schema-validated log entry storage with JSONB
+    - API Key authentication with rate limiting
+    - Dual-server architecture (Main API + Admin API)
+    - WebSocket support for real-time log events
+    - Cursor-based pagination for efficient data retrieval
+    - PostgreSQL persistent storage with GIN indexes
+    - Filtering and complex query support
+    - Health monitoring endpoints
+    - Request tracking via X-Request-ID header
+    
+    ## Architecture
+    - **Main API (Port 8080)**: Public-facing API with Bearer token authentication
+    - **Admin API (Port 8081)**: Localhost-only API for key management (no auth required)
     
     ## Workflow
-    1. Register a JSON schema using POST /schemas
-    2. Send log entries to POST /logs (with schema_id in the payload)
-    3. All logs are validated against their schema before storage
+    1. Create an API key using Admin API (POST /api-keys)
+    2. Register a JSON schema using Main API (POST /schemas)
+    3. Send log entries to Main API (POST /logs with schema_id)
+    4. Query logs with filtering and pagination
+    5. Subscribe to real-time events via WebSocket
     
   version: 1.0.0
   contact:
     name: Log Server Support
-    url: https://github.com/your-org/log-server
+    url: https://github.com/Milo46/log-server
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
 
 servers:
   - url: http://localhost:8080
-    description: Development server
-  - url: https://api.example.com
-    description: Production server
+    description: Main API (requires API key)
+  - url: http://localhost:8081
+    description: Admin API (localhost only, no auth)
+
+tags:
+  - name: Health
+    description: Health monitoring endpoints
+  - name: Schemas
+    description: Schema management operations (Main API - requires auth)
+  - name: Logs
+    description: Log entry operations (Main API - requires auth)
+  - name: WebSocket
+    description: Real-time event streaming (Main API - requires auth)
+  - name: API Keys
+    description: API key management (Admin API - no auth required)
 
 paths:
+  # ==================== MAIN API (Port 8080) ====================
+  
   /:
     get:
-      summary: Root health check endpoint
-      description: |
-        Returns the health status of the service.
-        Alternative to /health endpoint.
-      operationId: getRootStatus
+      summary: Root endpoint
+      description: Returns basic service information
+      operationId: getRoot
       tags:
         - Health
+      security: []
+      responses:
+        '200':
+          description: Service information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RootResponse'
+
+  /health:
+    get:
+      summary: Health check endpoint
+      description: |
+        Returns the health status of the service.
+        Used by monitoring systems and load balancers.
+      operationId: getHealthStatus
+      tags:
+        - Health
+      security: []
       responses:
         '200':
           description: Service is healthy
@@ -50,6 +91,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                service: "log-server"
+                timestamp: "2025-10-23T10:30:00Z"
 
   /schemas:
     post:
@@ -60,12 +105,14 @@ paths:
       operationId: createSchema
       tags:
         - Schemas
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SchemaRequest'
+              $ref: '#/components/schemas/CreateSchemaRequest'
             examples:
               web_server_schema:
                 summary: Web server log schema
@@ -89,186 +136,123 @@ paths:
                       request_id:
                         type: "string"
                         pattern: "^[a-zA-Z0-9-]+$"
-                      user_id:
-                        type: "string"
-                      response_time_ms:
-                        type: "number"
-                        minimum: 0
-              error_tracking_schema:
-                summary: Error tracking schema
-                value:
-                  name: "error-tracking"
-                  version: "2.1.0"
-                  description: "Schema for application error tracking"
-                  schema_definition:
-                    type: "object"
-                    required: ["timestamp", "error_type", "message", "stack_trace"]
-                    properties:
-                      timestamp:
-                        type: "string"
-                        format: "date-time"
-                      error_type:
-                        type: "string"
-                        enum: ["TypeError", "ReferenceError", "SyntaxError", "CustomError"]
-                      message:
-                        type: "string"
-                      stack_trace:
-                        type: "string"
-                      user_context:
-                        type: "object"
-                        properties:
-                          user_id:
-                            type: "string"
-                          session_id:
-                            type: "string"
       responses:
         '201':
           description: Schema created successfully
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+              description: Request tracking ID
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SchemaResponse'
-              example:
-                id: "550e8400-e29b-41d4-a716-446655440000"
-                name: "web-server-logs"
-                version: "1.0.0"
-                description: "Schema for web server access logs"
-                schema_definition:
-                  type: "object"
-                  required: ["timestamp", "level", "message", "request_id"]
-                  properties:
-                    timestamp:
-                      type: "string"
-                      format: "date-time"
-                    level:
-                      type: "string"
-                      enum: ["DEBUG", "INFO", "WARN", "ERROR"]
-                created_at: "2025-10-23T09:00:00Z"
-                updated_at: "2025-10-23T09:00:00Z"
         '400':
-          description: Invalid JSON or missing required fields
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: "INVALID_SCHEMA"
-                message: "Unexpected token at position 15"
-        '422':
-          description: Invalid JSON Schema specification
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: "INVALID_SCHEMA"
-                message: "Schema must be a valid JSON Schema Draft 7 specification"
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '409':
-          description: Schema with the same name and version already exists
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: "SCHEMA_CONFLICT"
-                message: "A schema with name 'web-server-logs' and version '1.0.0' already exists"
+          $ref: '#/components/responses/SchemaConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
         '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
     get:
       summary: Retrieve schemas
       description: |
         Retrieves all registered schemas or filters by specific criteria.
-        Results are returned with the most recently created schemas first.
+        Supports cursor-based pagination for efficient traversal.
       operationId: getSchemas
       tags:
         - Schemas
+      security:
+        - bearerAuth: []
       parameters:
         - name: name
           in: query
           description: Filter schemas by exact name match
-          required: false
           schema:
             type: string
         - name: version
           in: query
           description: Filter schemas by exact version match
-          required: false
           schema:
             type: string
+        - name: cursor
+          in: query
+          description: Pagination cursor from previous response
           schema:
             type: string
+        - name: limit
+          in: query
+          description: Maximum number of schemas to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: direction
+          in: query
+          description: Pagination direction
+          schema:
+            type: string
+            enum: [forward, backward]
+            default: forward
       responses:
         '200':
           description: Successfully retrieved schemas
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  schemas:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/SchemaResponse'
-              example:
-                schemas:
-                  - id: "550e8400-e29b-41d4-a716-446655440000"
-                    name: "web-server-logs"
-                    version: "1.0.0"
-                    description: "Schema for web server access logs"
-                    schema_definition:
-                      type: "object"
-                      required: ["timestamp", "level", "message"]
-                      properties:
-                        timestamp:
-                          type: "string"
-                          format: "date-time"
-                        level:
-                          type: "string"
-                          enum: ["DEBUG", "INFO", "WARN", "ERROR"]
-                    created_at: "2025-10-23T09:00:00Z"
-                    updated_at: "2025-10-23T09:00:00Z"
-                  - id: "660f8500-f39c-52e5-b827-557766551001"
-                    name: "error-tracking"
-                    version: "2.1.0"
-                    description: "Schema for application error tracking"
-                    schema_definition:
-                      type: "object"
-                      required: ["error_type", "message"]
-                      properties:
-                        error_type:
-                          type: "string"
-                        message:
-                          type: "string"
-                    created_at: "2025-10-22T14:30:00Z"
-                    updated_at: "2025-10-22T14:30:00Z"
-        '500':
-          description: Internal server error
+                $ref: '#/components/schemas/GetSchemasResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /schemas/cursor/initial:
+    get:
+      summary: Get initial cursor for schema pagination
+      description: Returns the initial cursor for forward or backward pagination
+      operationId: getSchemasInitialCursor
+      tags:
+        - Schemas
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [forward, backward]
+            default: forward
+      responses:
+        '200':
+          description: Initial cursor
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/CursorResponse'
 
   /schemas/{id}:
     get:
       summary: Retrieve a specific schema
-      description: Retrieves a single schema by its unique UUID, including the full schema definition.
+      description: Retrieves a single schema by its unique UUID
       operationId: getSchemaById
       tags:
         - Schemas
+      security:
+        - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: The unique UUID identifier of the schema
-          schema:
-            type: string
-            format: uuid
-          example: "550e8400-e29b-41d4-a716-446655440000"
+        - $ref: '#/components/parameters/SchemaId'
       responses:
         '200':
           description: Successfully retrieved schema
@@ -277,14 +261,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SchemaResponse'
         '404':
-          description: Schema not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: "NOT_FOUND"
-                message: "Schema with id '550e8400-e29b-41d4-a716-446655440000' not found"
+          $ref: '#/components/responses/NotFound'
 
     put:
       summary: Update a schema
@@ -292,20 +269,16 @@ paths:
       operationId: updateSchema
       tags:
         - Schemas
+      security:
+        - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: The unique UUID identifier of the schema
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/SchemaId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SchemaRequest'
+              $ref: '#/components/schemas/UpdateSchemaRequest'
       responses:
         '200':
           description: Schema updated successfully
@@ -313,50 +286,47 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SchemaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
-          description: Schema not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/SchemaConflict'
 
     delete:
       summary: Delete a schema
       description: |
         Deletes a schema by its UUID. By default, schemas with associated logs cannot be deleted.
-        Use the 'force' query parameter to delete schemas even when logs exist.
+        Use the 'force' query parameter to delete schemas along with their logs.
       operationId: deleteSchema
       tags:
         - Schemas
+      security:
+        - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: The unique UUID identifier of the schema
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/SchemaId'
         - name: force
           in: query
-          required: false
-          description: Force deletion even when logs are associated with the schema
+          description: Force deletion even when logs exist
           schema:
             type: boolean
             default: false
       responses:
-        '204':
+        '200':
           description: Schema deleted successfully
-        '404':
-          description: Schema not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: "NOT_FOUND"
-                message: "Schema with id '550e8400-e29b-41d4-a716-446655440000' not found"
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/SchemaResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
-          description: Cannot delete schema because it has associated logs
+          description: Cannot delete schema with logs (use force=true)
           content:
             application/json:
               schema:
@@ -364,12 +334,61 @@ paths:
               example:
                 error: "SCHEMA_HAS_LOGS"
                 message: "Cannot delete schema: 5 log(s) are associated with this schema"
-        '500':
-          description: Internal server error
+
+  /schemas/by-name/{name}/latest:
+    get:
+      summary: Get latest schema version by name
+      description: Retrieves the latest version of a schema by its name
+      operationId: getSchemaByNameLatest
+      tags:
+        - Schemas
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved schema
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/SchemaResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /schemas/by-name/{name}/versions/{version}:
+    get:
+      summary: Get schema by name and version
+      description: Retrieves a specific schema by its name and version
+      operationId: getSchemaByNameAndVersion
+      tags:
+        - Schemas
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved schema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchemaResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /logs:
     post:
@@ -380,65 +399,34 @@ paths:
       operationId: createLogEntry
       tags:
         - Logs
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: ["schema_id", "log_data"]
-              properties:
-                schema_id:
-                  type: string
-                  format: uuid
-                  description: The UUID of the schema to validate against
-                log_data:
-                  type: object
-                  description: The log data that must conform to the schema
-            examples:
-              web_server_log:
-                summary: Web server access log
-                value:
-                  schema_id: "550e8400-e29b-41d4-a716-446655440000"
-                  log_data:
-                    timestamp: "2025-10-23T10:00:00Z"
-                    level: "INFO"
-                    message: "User login successful"
-                    request_id: "req-12345"
+              $ref: '#/components/schemas/CreateLogRequest'
+            example:
+              schema_id: "550e8400-e29b-41d4-a716-446655440000"
+              log_data:
+                timestamp: "2025-10-23T10:00:00Z"
+                level: "INFO"
+                message: "User login successful"
+                request_id: "req-12345"
       responses:
         '201':
           description: Log entry created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LogEntryResponse'
-              example:
-                id: 123
-                schema_id: "550e8400-e29b-41d4-a716-446655440000"
-                log_data:
-                  timestamp: "2025-10-23T10:00:00Z"
-                  level: "INFO"
-                  message: "User login successful"
-                  request_id: "req-12345"
-                created_at: "2025-10-23T10:00:00Z"
+                $ref: '#/components/schemas/LogResponse'
         '400':
-          description: Invalid request format or missing required fields
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/BadRequest'
         '404':
-          description: Schema not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/NotFound'
         '422':
-          description: Log data validation failed against schema
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/ValidationError'
 
   /logs/{id}:
     get:
@@ -447,26 +435,19 @@ paths:
       operationId: getLogById
       tags:
         - Logs
+      security:
+        - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: The unique integer ID of the log entry
-          schema:
-            type: integer
+        - $ref: '#/components/parameters/LogId'
       responses:
         '200':
           description: Successfully retrieved log entry
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LogEntryResponse'
+                $ref: '#/components/schemas/LogResponse'
         '404':
-          description: Log entry not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/NotFound'
 
     delete:
       summary: Delete a log entry
@@ -474,162 +455,484 @@ paths:
       operationId: deleteLog
       tags:
         - Logs
+      security:
+        - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: The unique integer ID of the log entry
-          schema:
-            type: integer
+        - $ref: '#/components/parameters/LogId'
       responses:
-        '204':
+        '200':
           description: Log entry deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/LogResponse'
         '404':
-          description: Log entry not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: "NOT_FOUND"
-                message: "Log with id '123' not found"
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/NotFound'
 
-  /logs/schema/{schema_name}:
+  /logs/schema/{schema_id}:
     get:
-      summary: Get logs by schema name (default version)
+      summary: Get logs by schema ID
       description: |
-        Retrieves all log entries for a specific schema name using the default version (1.0.0).
-        Supports filtering via query parameters.
-      operationId: getLogsBySchemaName
+        Retrieves log entries for a specific schema with optional filtering and pagination.
+      operationId: getLogsBySchemaId
       tags:
         - Logs
+      security:
+        - bearerAuth: []
       parameters:
-        - name: schema_name
+        - name: schema_id
           in: path
           required: true
-          description: The name of the schema
           schema:
             type: string
-        - name: level
-          in: query
-          description: Filter logs by level
-          schema:
-            type: string
-        - name: limit
-          in: query
-          description: Maximum number of logs to return
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 1000
-            default: 100
+            format: uuid
+        - $ref: '#/components/parameters/LogFilters'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/DateBegin'
+        - $ref: '#/components/parameters/DateEnd'
       responses:
         '200':
           description: Successfully retrieved logs
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  logs:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/LogEntryResponse'
-                  count:
-                    type: integer
+                $ref: '#/components/schemas/PaginatedLogsResponse'
         '404':
-          description: Schema not found
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      summary: Query logs by schema ID
+      description: |
+        Complex query endpoint for logs with JSON body support for advanced filtering.
+      operationId: queryLogsBySchemaId
+      tags:
+        - Logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: schema_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryLogsRequest'
+      responses:
+        '200':
+          description: Successfully retrieved logs
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/PaginatedLogsResponse'
 
-  /logs/schema/{schema_name}/{schema_version}:
+  /logs/schema/{schema_id}/cursor/initial:
+    get:
+      summary: Get initial cursor for logs
+      description: Returns the initial cursor for cursor-based pagination of logs
+      operationId: getLogsInitialCursor
+      tags:
+        - Logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: schema_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [forward, backward]
+            default: forward
+      responses:
+        '200':
+          description: Initial cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorResponse'
+
+  /logs/by-schema-name/{name}/latest:
+    get:
+      summary: Get logs by schema name (latest version)
+      description: Retrieves logs for the latest version of a schema by name
+      operationId: getLogsBySchemaNameLatest
+      tags:
+        - Logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/LogFilters'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/DateBegin'
+        - $ref: '#/components/parameters/DateEnd'
+      responses:
+        '200':
+          description: Successfully retrieved logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLogsResponse'
+
+    post:
+      summary: Query logs by schema name (latest version)
+      description: Complex query for logs by schema name
+      operationId: queryLogsBySchemaNameLatest
+      tags:
+        - Logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryLogsRequest'
+      responses:
+        '200':
+          description: Successfully retrieved logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLogsResponse'
+
+  /logs/by-schema-name/{name}/versions/{version}:
     get:
       summary: Get logs by schema name and version
-      description: |
-        Retrieves all log entries for a specific schema name and version.
-        Supports filtering via query parameters.
+      description: Retrieves logs for a specific schema name and version
       operationId: getLogsBySchemaNameAndVersion
       tags:
         - Logs
+      security:
+        - bearerAuth: []
       parameters:
-        - name: schema_name
+        - name: name
           in: path
           required: true
-          description: The name of the schema
           schema:
             type: string
-        - name: schema_version
+        - name: version
           in: path
           required: true
-          description: The version of the schema
           schema:
             type: string
-        - name: level
-          in: query
-          description: Filter logs by level
-          schema:
-            type: string
-        - name: limit
-          in: query
-          description: Maximum number of logs to return
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 1000
-            default: 100
+        - $ref: '#/components/parameters/LogFilters'
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/DateBegin'
+        - $ref: '#/components/parameters/DateEnd'
       responses:
         '200':
           description: Successfully retrieved logs
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  logs:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/LogEntryResponse'
-                  count:
-                    type: integer
-        '404':
-          description: Schema not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/PaginatedLogsResponse'
 
-  /health:
-    get:
-      summary: Health check endpoint
-      description: |
-        Returns the health status of the service.
-        Used by monitoring systems and load balancers.
-      operationId: getHealthStatus
+    post:
+      summary: Query logs by schema name and version
+      description: Complex query for logs by schema name and version
+      operationId: queryLogsBySchemaNameAndVersion
       tags:
-        - Health
+        - Logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryLogsRequest'
       responses:
         '200':
-          description: Service is healthy
+          description: Successfully retrieved logs
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
+                $ref: '#/components/schemas/PaginatedLogsResponse'
+
+  /ws/logs:
+    get:
+      summary: WebSocket connection for real-time log events
+      description: |
+        Establishes a WebSocket connection for receiving real-time log events.
+        Broadcasts 'created' and 'deleted' events as they occur.
+        Optional schema_id query parameter filters events to a specific schema.
+      operationId: connectWebSocket
+      tags:
+        - WebSocket
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: schema_id
+          in: query
+          description: Filter events by schema ID
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '101':
+          description: Switching Protocols - WebSocket connection established
+        '400':
+          description: Invalid schema_id format
+        '401':
+          description: Unauthorized - invalid or missing API key
+        '404':
+          description: Schema not found
+
+  # ==================== ADMIN API (Port 8081) ====================
+
+  /api-keys:
+    post:
+      summary: Create a new API key
+      description: |
+        Creates a new API key for accessing the Main API.
+        The plain key is returned only once - save it immediately.
+      operationId: createApiKey
+      tags:
+        - API Keys
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+            example:
+              name: "Production API Key"
+              description: "Key for production services"
+              expires_at: "2026-12-31T23:59:59Z"
+              allowed_ips: ["192.168.1.0/24", "10.0.0.5"]
+              rate_limit_per_second: 100
+              rate_limit_burst: 200
+      responses:
+        '201':
+          description: API key created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateApiKeyResponse'
               example:
-                status: "healthy"
-                service: "log-server"
-                timestamp: "2025-10-23T10:30:00Z"
+                id: 1
+                key: "lgs_prod_abc123def456ghi789jkl012mno345"
+                key_prefix: "lgs_prod_abc"
+                name: "Production API Key"
+                created_at: "2026-01-02T10:00:00Z"
+                expires_at: "2026-12-31T23:59:59Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    get:
+      summary: List all API keys
+      description: |
+        Retrieves all API keys (excluding the actual key values).
+        Shows metadata including usage statistics and status.
+      operationId: listApiKeys
+      tags:
+        - API Keys
+      security: []
+      responses:
+        '200':
+          description: Successfully retrieved API keys
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeysResponse'
+
+  /api-keys/{key_id}:
+    get:
+      summary: Get API key details
+      description: Retrieves details of a specific API key by its ID
+      operationId: getApiKeyById
+      tags:
+        - API Keys
+      security: []
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successfully retrieved API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete an API key
+      description: |
+        Deletes an API key, immediately revoking access.
+        This action is irreversible.
+      operationId: deleteApiKey
+      tags:
+        - API Keys
+      security: []
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: API key deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ApiKeyResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api-keys/{key_id}/rotate:
+    post:
+      summary: Rotate an API key
+      description: |
+        Generates a new key value while preserving the key's metadata and settings.
+        Returns the new key value (only shown once).
+      operationId: rotateApiKey
+      tags:
+        - API Keys
+      security: []
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: API key rotated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateApiKeyResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+      description: |
+        API key authentication using Bearer token.
+        Format: `Authorization: Bearer lgs_<your_key>`
+
+  parameters:
+    SchemaId:
+      name: id
+      in: path
+      required: true
+      description: The unique UUID identifier of the schema
+      schema:
+        type: string
+        format: uuid
+
+    LogId:
+      name: id
+      in: path
+      required: true
+      description: The unique integer ID of the log entry
+      schema:
+        type: integer
+        format: int64
+
+    LogFilters:
+      name: filters
+      in: query
+      description: JSON object for exact-match filtering on log_data fields
+      schema:
+        type: string
+      example: '{"level":"INFO","user_id":"123"}'
+
+    PageNumber:
+      name: page
+      in: query
+      description: Page number for pagination
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    PageLimit:
+      name: limit
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 10
+
+    DateBegin:
+      name: date_begin
+      in: query
+      description: Lower bound for created_at filter (ISO 8601)
+      schema:
+        type: string
+        format: date-time
+
+    DateEnd:
+      name: date_end
+      in: query
+      description: Upper bound for created_at filter (ISO 8601)
+      schema:
+        type: string
+        format: date-time
+
   schemas:
-    SchemaRequest:
+    # ==================== REQUEST SCHEMAS ====================
+
+    CreateSchemaRequest:
       type: object
       required:
         - name
@@ -641,27 +944,140 @@ components:
           minLength: 1
           maxLength: 255
           description: Human-readable name for the schema
-          example: "web-server-logs"
         version:
           type: string
           minLength: 1
           maxLength: 50
-          description: Version of the schema
-          example: "1.0.0"
+          description: Semantic version (e.g., "1.0.0")
         description:
           type: string
+          nullable: true
           maxLength: 1000
-          description: Optional description of what this schema is used for
-          example: "Schema for web server access logs"
+          description: Optional description of the schema
         schema_definition:
           type: object
           description: Valid JSON Schema Draft 7 specification
-          example:
-            type: "object"
-            required: ["message"]
-            properties:
-              message:
-                type: "string"
+
+    UpdateSchemaRequest:
+      type: object
+      required:
+        - name
+        - version
+        - schema_definition
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        version:
+          type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+          nullable: true
+          maxLength: 1000
+        schema_definition:
+          type: object
+
+    CreateLogRequest:
+      type: object
+      required:
+        - schema_id
+        - log_data
+      properties:
+        schema_id:
+          type: string
+          format: uuid
+          description: UUID of the schema to validate against
+        log_data:
+          type: object
+          description: Log data that must conform to the schema
+          additionalProperties: true
+
+    QueryLogsRequest:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          default: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 10
+        filters:
+          type: object
+          description: Exact-match filters for log_data fields
+          additionalProperties: true
+        date_begin:
+          type: string
+          format: date-time
+        date_end:
+          type: string
+          format: date-time
+
+    CreateApiKeyRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Human-readable name for the API key
+        description:
+          type: string
+          nullable: true
+          description: Optional description of the key's purpose
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional expiration timestamp (ISO 8601)
+        allowed_ips:
+          type: array
+          items:
+            type: string
+          description: Optional list of allowed IP addresses or CIDR blocks
+          example: ["192.168.1.0/24", "10.0.0.5"]
+        rate_limit_per_second:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Base rate limit (requests per second)
+        rate_limit_burst:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Burst capacity (defaults to 2x base rate)
+
+    # ==================== RESPONSE SCHEMAS ====================
+
+    RootResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        version:
+          type: string
+        docs:
+          type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "healthy"
+        service:
+          type: string
+          example: "log-server"
+        timestamp:
+          type: string
+          format: date-time
 
     SchemaResponse:
       type: object
@@ -669,184 +1085,305 @@ components:
         id:
           type: string
           format: uuid
-          description: Unique UUID identifier for the schema
-          example: "550e8400-e29b-41d4-a716-446655440000"
         name:
           type: string
-          description: Human-readable name for the schema
-          example: "web-server-logs"
         version:
           type: string
-          description: Version of the schema
-          example: "1.0.0"
         description:
           type: string
           nullable: true
-          description: Optional description of the schema
-          example: "Schema for web server access logs"
         schema_definition:
           type: object
-          description: The JSON Schema definition
-          example:
-            type: "object"
-            required: ["timestamp", "level", "message"]
-            properties:
-              timestamp:
-                type: "string"
-                format: "date-time"
-              level:
-                type: "string"
-                enum: ["DEBUG", "INFO", "WARN", "ERROR"]
         created_at:
           type: string
           format: date-time
-          description: ISO 8601 timestamp when the schema was created
-          example: "2025-10-23T09:00:00Z"
         updated_at:
           type: string
           format: date-time
-          description: ISO 8601 timestamp when the schema was last updated
-          example: "2025-10-23T09:00:00Z"
 
-    LogEntryResponse:
+    GetSchemasResponse:
+      type: object
+      properties:
+        schemas:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchemaResponse'
+        cursor_metadata:
+          $ref: '#/components/schemas/CursorMetadata'
+
+    CursorMetadata:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+        prev_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+
+    CursorResponse:
+      type: object
+      properties:
+        cursor:
+          type: string
+
+    LogResponse:
       type: object
       properties:
         id:
           type: integer
           format: int64
-          description: Unique identifier for the log entry
-          example: 123
         schema_id:
           type: string
           format: uuid
-          description: UUID of the schema this log entry was validated against
-          example: "550e8400-e29b-41d4-a716-446655440000"
         log_data:
           type: object
-          description: The actual log data that was validated against the schema
           additionalProperties: true
-          example:
-            message: "Test log message"
         created_at:
           type: string
           format: date-time
-          description: ISO 8601 timestamp when the log entry was stored
-          example: "2025-10-23T10:00:01Z"
 
-    HealthResponse:
+    PaginatedLogsResponse:
       type: object
       properties:
-        status:
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMetadata'
+
+    PaginationMetadata:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        total_pages:
+          type: integer
+        total_count:
+          type: integer
+        page_size:
+          type: integer
+
+    CreateApiKeyResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        key:
           type: string
-          description: Health status of the service
-          example: "healthy"
-        service:
+          description: The full API key (only returned on creation/rotation)
+        key_prefix:
           type: string
-          description: Name of the service
-          example: "log-server"
-        timestamp:
+          description: First 13 characters for identification
+        name:
+          type: string
+        created_at:
           type: string
           format: date-time
-          description: ISO 8601 timestamp when the health check was performed
-          example: "2025-10-23T10:30:00Z"
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
 
-    SchemaValidationErrorResponse:
+    ApiKeyResponse:
       type: object
       properties:
-        error:
+        id:
+          type: integer
+        key_prefix:
           type: string
-          description: High-level error category
-          example: "VALIDATION_FAILED"
-        message:
+          nullable: true
+        name:
           type: string
-          description: Detailed error message
-          example: "Log entry does not conform to schema"
-        schema_id:
+        description:
           type: string
-          description: The UUID of the schema that was used for validation
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        violations:
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_active:
+          type: boolean
+        allowed_ips:
           type: array
-          description: List of specific validation violations
           items:
-            type: object
-            properties:
-              field:
-                type: string
-                description: The field that failed validation
-                example: "request_id"
-              message:
-                type: string
-                description: Description of the validation failure
-                example: "Field is required but missing"
+            type: string
+          nullable: true
+        usage_count:
+          type: integer
+          format: int64
+          nullable: true
+        rate_limit_per_second:
+          type: integer
+          nullable: true
+        rate_limit_burst:
+          type: integer
+          nullable: true
+
+    ApiKeysResponse:
+      type: object
+      properties:
+        api_keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKeyResponse'
+
+    LogEvent:
+      type: object
+      properties:
+        event_type:
+          type: string
+          enum: [created, deleted]
+        log:
+          $ref: '#/components/schemas/LogResponse'
+      description: WebSocket event payload
 
     ErrorResponse:
       type: object
       properties:
         error:
           type: string
-          description: High-level error category
-          example: "INVALID_INPUT"
+          description: Error code or category
         message:
           type: string
-          description: Detailed error message
-          example: "Schema name cannot be empty"
-        field_errors:
+          description: Human-readable error message
+        details:
           type: object
-          description: Field-specific validation errors (optional)
-          additionalProperties:
-            type: array
-            items:
-              type: string
+          nullable: true
+          description: Additional error details
+        request_id:
+          type: string
+          description: Request tracking ID
+
+  responses:
+    BadRequest:
+      description: Invalid request format or parameters
+      headers:
+        X-Request-ID:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
           example:
-            name: ["Cannot be empty"]
-            version: ["Invalid format"]
+            error: "INVALID_INPUT"
+            message: "Schema name cannot be empty"
 
-  examples:
-    WebServerSchema:
-      summary: Web server log schema
-      value:
-        name: "web-server-logs"
-        version: "1.0.0"
-        description: "Schema for web server access logs"
-        schema_definition:
-          type: "object"
-          required: ["message"]
-          properties:
-            message:
-              type: "string"
+    Unauthorized:
+      description: Missing or invalid API key
+      headers:
+        X-Request-ID:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "UNAUTHORIZED"
+            message: "Invalid or expired API key"
 
-    ErrorTrackingSchema:
-      summary: Error tracking schema
-      value:
-        name: "error-tracking"
-        version: "2.1.0"
-        description: "Schema for application error tracking"
-        schema_definition:
-          type: "object"
-          required: ["message"]
-          properties:
-            message:
-              type: "string"
+    NotFound:
+      description: Resource not found
+      headers:
+        X-Request-ID:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "NOT_FOUND"
+            message: "Schema not found"
 
-    WebServerLogEntry:
-      summary: Web server log entry
-      value:
-        message: "Test log message"
+    SchemaConflict:
+      description: Schema with same name and version already exists
+      headers:
+        X-Request-ID:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "SCHEMA_CONFLICT"
+            message: "A schema with this name and version already exists"
 
-    ErrorLogEntry:
-      summary: Error tracking log entry
-      value:
-        message: "Test error message"
+    ValidationError:
+      description: Validation failed
+      headers:
+        X-Request-ID:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "VALIDATION_FAILED"
+            message: "Log data does not conform to schema"
+            details:
+              violations:
+                - field: "level"
+                  message: "Value must be one of: DEBUG, INFO, WARN, ERROR"
 
-tags:
-  - name: Schemas
-    description: Operations for managing log schemas
-  - name: Logs
-    description: Operations for managing log entries
-  - name: Health
-    description: Health monitoring endpoints
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      headers:
+        X-Request-ID:
+          schema:
+            type: string
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Rate limit burst capacity
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Seconds until reset
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "RATE_LIMIT_EXCEEDED"
+            message: "Rate limit exceeded. Please try again later."
+
+    InternalServerError:
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "INTERNAL_ERROR"
+            message: "An unexpected error occurred"
 
 externalDocs:
-  description: Find more info in the Software Requirements Document
-  url: ./SRD.md
+  description: Software Requirements Document
+  url: https://github.com/Milo46/log-server/blob/master/docs/SRD.md
