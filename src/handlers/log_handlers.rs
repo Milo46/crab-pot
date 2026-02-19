@@ -93,7 +93,13 @@ async fn get_logs_internal(
 
     let (logs, cursor_metadata) = state
         .log_service
-        .get_cursor_logs(schema_id, params.cursor, params.limit, filters)
+        .get_cursor_logs(
+            schema_id,
+            params.cursor,
+            params.limit,
+            filters,
+            params.direction,
+        )
         .await
         .with_req_id(&request_id)?;
 

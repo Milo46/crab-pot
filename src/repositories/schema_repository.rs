@@ -13,6 +13,7 @@ pub trait SchemaRepositoryTrait {
         cursor: Option<Uuid>,
         limit: i32,
         filters: SchemaQueryParams,
+        forward: bool,
     ) -> AppResult<Vec<Schema>>;
     async fn get_by_id(&self, id: Uuid) -> AppResult<Option<Schema>>;
     async fn get_by_name_latest(&self, name: &str) -> AppResult<Option<Schema>>;
@@ -54,14 +55,16 @@ impl SchemaRepositoryTrait for SchemaRepository {
         cursor: Option<Uuid>,
         limit: i32,
         filters: SchemaQueryParams,
+        forward: bool,
     ) -> AppResult<Vec<Schema>> {
         let fetch_limit = limit + 1;
+        let order = if forward { "DESC" } else { "ASC" };
 
         let schemas = SchemaQueryBuilder::select()
             .filters(Some(&filters))
-            .cursor(cursor)
-            .order_by("created_at", "DESC")
-            .then_order_by("id", "DESC")
+            .cursor(cursor, forward)
+            .order_by("created_at", order)
+            .then_order_by("id", order)
             .limit(fetch_limit)
             .build()
             .build_query_as::<Schema>()

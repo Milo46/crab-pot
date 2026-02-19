@@ -4,8 +4,6 @@ use serde::{Deserialize, Serialize};
 pub struct CursorMetadata<T> {
     pub limit: i32,
     pub next_cursor: Option<T>,
-    /// Cursor for fetching the previous page (toward newer logs).
-    /// Currently not supported - always None.
     pub prev_cursor: Option<T>,
     pub has_more: bool,
 }

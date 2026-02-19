@@ -1,4 +1,4 @@
-use crate::dto::CursorMetadata;
+use crate::dto::{log_dto::Direction, CursorMetadata};
 use crate::error::AppResult;
 use crate::models::query_params::LogQueryParams;
 use crate::models::Log;
@@ -82,6 +82,7 @@ impl LogService {
         cursor: Option<i32>,
         limit: i32,
         filters: LogQueryParams,
+        direction: Direction,
     ) -> AppResult<(Vec<Log>, CursorMetadata<i32>)> {
         if schema_id.is_nil() {
             return Err(AppError::bad_request("Schema ID cannot be nil"));
@@ -109,9 +110,11 @@ impl LogService {
             )));
         }
 
+        let forward = direction == Direction::Forward;
+
         let mut logs = self
             .log_repository
-            .get_all_with_cursor(schema_id, cursor, limit, filters)
+            .get_all_with_cursor(schema_id, cursor, limit, filters, forward)
             .await
             .map_err(|e| {
                 e.context(format!(
@@ -126,16 +129,30 @@ impl LogService {
             logs.pop();
         }
 
-        let next_cursor = if has_more {
-            logs.last().map(|log| log.id)
-        } else {
-            None
-        };
+        if !forward {
+            logs.reverse();
+        }
 
-        // For backward pagination (toward newer logs):
-        // prev_cursor would be first_id + 1, but we don't support
-        // bidirectional pagination yet. Setting to None for clarity.
-        let prev_cursor = None;
+        let (next_cursor, prev_cursor) = match direction {
+            Direction::Forward => {
+                let next = if has_more {
+                    logs.last().map(|log| log.id)
+                } else {
+                    None
+                };
+                let prev = logs.first().map(|log| log.id);
+                (next, prev)
+            }
+            Direction::Backward => {
+                let next = logs.last().map(|log| log.id);
+                let prev = if has_more {
+                    logs.first().map(|log| log.id)
+                } else {
+                    None
+                };
+                (next, prev)
+            }
+        };
 
         Ok((
             logs,

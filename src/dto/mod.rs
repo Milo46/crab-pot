@@ -10,7 +10,7 @@ pub use schema_dto::{
 };
 
 pub use log_dto::{
-    CreateLogRequest, CursorLogsResponse, LogEvent, LogResponse, LogsResponse,
+    CreateLogRequest, CursorLogsResponse, Direction, LogEvent, LogResponse, LogsResponse,
     PaginatedLogsResponse, PaginationMetadata, QueryLogsRequest, TimeWindowMetadata,
 };
 

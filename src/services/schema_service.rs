@@ -1,4 +1,4 @@
-use crate::dto::CursorMetadata;
+use crate::dto::{log_dto::Direction, CursorMetadata};
 use crate::error::{AppError, AppResult};
 use crate::models::{Schema, SchemaNameVersion, SchemaQueryParams};
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
@@ -100,14 +100,17 @@ impl SchemaService {
         cursor: Option<Uuid>,
         limit: i32,
         filters: SchemaQueryParams,
+        direction: Direction,
     ) -> AppResult<(Vec<Schema>, CursorMetadata<Uuid>)> {
         if limit <= 0 {
             return Err(AppError::bad_request("Limit must be greater than 0"));
         }
 
+        let forward = direction == Direction::Forward;
+
         let mut schemas = self
             .repository
-            .get_all_with_cursor(cursor, limit, filters)
+            .get_all_with_cursor(cursor, limit, filters, forward)
             .await
             .map_err(|e| e.context("Failed to get schemas with cursor feature"))?;
 
@@ -117,13 +120,30 @@ impl SchemaService {
             schemas.pop();
         }
 
-        let next_cursor = if has_more {
-            schemas.last().map(|schema| schema.id)
-        } else {
-            None
-        };
+        if !forward {
+            schemas.reverse();
+        }
 
-        let prev_cursor = None;
+        let (next_cursor, prev_cursor) = match direction {
+            Direction::Forward => {
+                let next = if has_more {
+                    schemas.last().map(|schema| schema.id)
+                } else {
+                    None
+                };
+                let prev = schemas.first().map(|schema| schema.id);
+                (next, prev)
+            }
+            Direction::Backward => {
+                let next = schemas.last().map(|schema| schema.id);
+                let prev = if has_more {
+                    schemas.first().map(|schema| schema.id)
+                } else {
+                    None
+                };
+                (next, prev)
+            }
+        };
 
         Ok((
             schemas,

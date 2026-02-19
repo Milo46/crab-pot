@@ -3,7 +3,7 @@ use serde_json::Value;
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::{dto::common::CursorMetadata, Schema};
+use crate::{dto::{common::CursorMetadata, log_dto::Direction}, Schema};
 
 fn validate_string_not_empty(string: &String) -> Result<(), validator::ValidationError> {
     if string.trim().is_empty() {
@@ -101,6 +101,10 @@ fn default_limit() -> i32 {
     10
 }
 
+fn default_direction() -> Direction {
+    Direction::Forward
+}
+
 #[derive(Debug, Deserialize)]
 pub struct GetSchemasQuery {
     pub name: Option<String>,
@@ -108,6 +112,8 @@ pub struct GetSchemasQuery {
     pub cursor: Option<Uuid>,
     #[serde(default = "default_limit")]
     pub limit: i32,
+    #[serde(default = "default_direction")]
+    pub direction: Direction,
 }
 
 #[derive(Debug, Deserialize)]

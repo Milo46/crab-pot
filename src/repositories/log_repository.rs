@@ -15,6 +15,7 @@ pub trait LogRepositoryTrait {
         cursor: Option<i32>,
         limit: i32,
         filters: LogQueryParams,
+        forward: bool,
     ) -> AppResult<Vec<Log>>;
     async fn get_by_id(&self, id: i32) -> AppResult<Option<Log>>;
     async fn create(&self, log: &Log) -> AppResult<Log>;
@@ -49,15 +50,17 @@ impl LogRepositoryTrait for LogRepository {
         cursor: Option<i32>,
         limit: i32,
         filters: LogQueryParams,
+        forward: bool,
     ) -> AppResult<Vec<Log>> {
         let fetch_limit = limit + 1;
+        let order = if forward { "DESC" } else { "ASC" };
 
         let logs = LogQueryBuilder::select()
             .schema_id(schema_id)
             .filters(Some(&filters))
-            .cursor(cursor)
-            .order_by("created_at", "DESC")
-            .then_order_by("id", "DESC")
+            .cursor(cursor, forward)
+            .order_by("created_at", order)
+            .then_order_by("id", order)
             .limit(fetch_limit)
             .build()
             .build_query_as::<Log>()

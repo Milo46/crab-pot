@@ -80,18 +80,33 @@ impl<'a> SchemaQueryBuilder<'a> {
         self
     }
 
-    pub fn cursor(mut self, cursor_id: Option<Uuid>) -> Self {
+    pub fn cursor(mut self, cursor_id: Option<Uuid>, forward: bool) -> Self {
         if let Some(id) = cursor_id {
             self.add_condition();
-            self.query
-                .push("(created_at < (SELECT created_at FROM schemas WHERE id = ");
-            self.query.push_bind(id);
-            self.query
-                .push(") OR (created_at = (SELECT created_at FROM schemas WHERE id = ");
-            self.query.push_bind(id);
-            self.query.push(") AND id < ");
-            self.query.push_bind(id);
-            self.query.push("))");
+
+            if forward {
+                // Fetch older items (created_at < cursor OR (created_at = cursor AND id < cursor_id))
+                self.query
+                    .push("(created_at < (SELECT created_at FROM schemas WHERE id = ");
+                self.query.push_bind(id);
+                self.query
+                    .push(") OR (created_at = (SELECT created_at FROM schemas WHERE id = ");
+                self.query.push_bind(id);
+                self.query.push(") AND id < ");
+                self.query.push_bind(id);
+                self.query.push("))");
+            } else {
+                // Fetch newer items (created_at > cursor OR (created_at = cursor AND id > cursor_id))
+                self.query
+                    .push("(created_at > (SELECT created_at FROM schemas WHERE id = ");
+                self.query.push_bind(id);
+                self.query
+                    .push(") OR (created_at = (SELECT created_at FROM schemas WHERE id = ");
+                self.query.push_bind(id);
+                self.query.push(") AND id > ");
+                self.query.push_bind(id);
+                self.query.push("))");
+            }
         }
         self
     }
@@ -148,18 +163,31 @@ impl<'a> LogQueryBuilder<'a> {
         self
     }
 
-    pub fn cursor(mut self, cursor_id: Option<i32>) -> Self {
+    pub fn cursor(mut self, cursor_id: Option<i32>, forward: bool) -> Self {
         if let Some(id) = cursor_id {
             self.add_condition();
-            self.query
-                .push("(created_at < (SELECT created_at FROM logs WHERE id = ");
-            self.query.push_bind(id);
-            self.query
-                .push(") OR (created_at = (SELECT created_at FROM logs WHERE id = ");
-            self.query.push_bind(id);
-            self.query.push(") AND id < ");
-            self.query.push_bind(id);
-            self.query.push("))");
+
+            if forward {
+                self.query
+                    .push("(created_at < (SELECT created_at FROM logs WHERE id = ");
+                self.query.push_bind(id);
+                self.query
+                    .push(") OR (created_at = (SELECT created_at FROM logs WHERE id = ");
+                self.query.push_bind(id);
+                self.query.push(") AND id < ");
+                self.query.push_bind(id);
+                self.query.push("))");
+            } else {
+                self.query
+                    .push("(created_at > (SELECT created_at FROM logs WHERE id = ");
+                self.query.push_bind(id);
+                self.query
+                    .push(") OR (created_at = (SELECT created_at FROM logs WHERE id = ");
+                self.query.push_bind(id);
+                self.query.push(") AND id > ");
+                self.query.push_bind(id);
+                self.query.push("))");
+            }
         }
         self
     }

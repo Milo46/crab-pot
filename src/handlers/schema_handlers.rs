@@ -29,7 +29,7 @@ pub async fn get_schemas(
 
     let (schemas, cursor_metadata) = state
         .schema_service
-        .get_cursor_schemas(query.cursor, query.limit, filters)
+        .get_cursor_schemas(query.cursor, query.limit, filters, query.direction)
         .await
         .with_req_id(&request_id)?;
 

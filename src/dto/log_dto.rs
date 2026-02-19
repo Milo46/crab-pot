@@ -125,6 +125,17 @@ fn default_limit() -> i32 {
     10
 }
 
+fn default_direction() -> Direction {
+    Direction::Forward
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Direction {
+    Forward,
+    Backward,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct QueryLogsRequest {
     pub date_begin: Option<DateTime<Utc>>,
@@ -133,18 +144,9 @@ pub struct QueryLogsRequest {
     pub cursor: Option<i32>,
     #[serde(default = "default_limit")]
     pub limit: i32,
+    #[serde(default = "default_direction")]
+    pub direction: Direction,
 }
-
-// impl From<QueryLogsRequest> for QueryParams {
-//     fn from(req: QueryLogsRequest) -> Self {
-//         Self {
-//             limit: req.limit,
-//             date_begin: req.date_begin,
-//             date_end: req.date_end,
-//             filters: req.filters,
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event_type", rename_all = "lowercase")]

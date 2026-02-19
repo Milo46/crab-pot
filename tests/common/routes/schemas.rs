@@ -65,3 +65,26 @@ pub async fn delete_schema(app: &TestApp, schema_id: &str) -> reqwest::Response 
         .await
         .unwrap()
 }
+
+pub async fn get_schemas_with_cursor(
+    app: &TestApp,
+    cursor: Option<String>,
+    limit: i32,
+    direction: &str,
+) -> reqwest::Response {
+    let mut query_params = vec![
+        ("limit", limit.to_string()),
+        ("direction", direction.to_string()),
+    ];
+
+    if let Some(c) = cursor {
+        query_params.push(("cursor", c));
+    }
+
+    app.auth()
+        .get("/schemas")
+        .query(&query_params)
+        .send()
+        .await
+        .unwrap()
+}

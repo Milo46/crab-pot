@@ -79,3 +79,29 @@ pub async fn delete_log<S: AsRef<str>>(app: &TestApp, id: S) -> reqwest::Respons
         .await
         .unwrap()
 }
+
+pub async fn get_logs_with_cursor<S: AsRef<str>>(
+    app: &TestApp,
+    schema_id: S,
+    cursor: Option<i32>,
+    limit: i32,
+    direction: &str,
+) -> reqwest::Response {
+    let mut query_params = vec![
+        ("limit", limit.to_string()),
+        ("direction", direction.to_string()),
+    ];
+
+    let cursor_str;
+    if let Some(c) = cursor {
+        cursor_str = c.to_string();
+        query_params.push(("cursor", cursor_str.clone()));
+    }
+
+    app.auth()
+        .get(format!("/logs/schemas/{}", schema_id.as_ref()))
+        .query(&query_params)
+        .send()
+        .await
+        .unwrap()
+}
