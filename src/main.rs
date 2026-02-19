@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     ));
     let log_service = Arc::new(LogService::new(
         log_repository.clone(),
-        schema_repository.clone(),
+        schema_service.clone(),
     ));
     let api_key_service = Arc::new(ApiKeyService::new(api_key_repository.clone()));
 

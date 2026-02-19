@@ -3,7 +3,7 @@ use crate::error::AppResult;
 use crate::models::query_params::LogQueryParams;
 use crate::models::Log;
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
-use crate::repositories::schema_repository::{SchemaRepository, SchemaRepositoryTrait};
+use crate::services::schema_service::SchemaService;
 use crate::AppError;
 use chrono::Utc;
 use serde_json::Value;
@@ -13,17 +13,14 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct LogService {
     log_repository: Arc<LogRepository>,
-    schema_repository: Arc<SchemaRepository>,
+    schema_service: Arc<SchemaService>,
 }
 
 impl LogService {
-    pub fn new(
-        log_repository: Arc<LogRepository>,
-        schema_repository: Arc<SchemaRepository>,
-    ) -> Self {
+    pub fn new(log_repository: Arc<LogRepository>, schema_service: Arc<SchemaService>) -> Self {
         Self {
             log_repository,
-            schema_repository,
+            schema_service,
         }
     }
 
@@ -43,6 +40,10 @@ impl LogService {
         if !log_data.is_object() {
             return Err(AppError::bad_request("Log data must be a JSON object"));
         }
+
+        self.schema_service
+            .validate_log_data(schema_id, &log_data)
+            .await?;
 
         let log = Log {
             id: 0, // This will be set by the database
@@ -92,9 +93,8 @@ impl LogService {
             return Err(AppError::bad_request("Limit must be greater than 0"));
         }
 
-        let schema_exists = self
-            .schema_repository
-            .get_by_id(schema_id)
+        self.schema_service
+            .get_schema_by_id(schema_id)
             .await
             .map_err(|e| {
                 e.context(format!(
@@ -102,13 +102,6 @@ impl LogService {
                     schema_id
                 ))
             })?;
-
-        if schema_exists.is_none() {
-            return Err(AppError::not_found(format!(
-                "Schema with id {} not found",
-                schema_id
-            )));
-        }
 
         let forward = direction == Direction::Forward;
 
