@@ -5,7 +5,10 @@ use rand::{rng, RngCore};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    models::{api_key_model::CreatedApiKey, ApiKey, CreateApiKey},
+    models::{
+        api_key_model::{CreatedApiKey, NewApiKey},
+        ApiKey, CreateApiKey,
+    },
     repositories::ApiKeyRepository,
     AppError, AppResult,
 };
@@ -49,18 +52,20 @@ impl ApiKeyService {
             .allowed_ips
             .map(|networks| networks.into_iter().map(|net| net.ip()).collect());
 
+        let new_key = NewApiKey {
+            key_hash: api_key_hash,
+            key_prefix: api_key_prefix,
+            name: request.name,
+            description: request.description,
+            expires_at: request.expires_at,
+            allowed_ips,
+            rate_limit_per_second: request.rate_limit_per_second,
+            rate_limit_burst: request.rate_limit_burst,
+        };
+
         let api_key = self
             .api_key_repository
-            .create(
-                &api_key_hash,
-                api_key_prefix,
-                &request.name,
-                request.description.as_deref(),
-                request.expires_at,
-                allowed_ips,
-                request.rate_limit_per_second,
-                request.rate_limit_burst,
-            )
+            .create(&new_key)
             .await
             .map_err(|e| e.context("Failed to create API key"))?;
 
@@ -107,7 +112,7 @@ impl ApiKeyService {
 
     pub async fn update_usage(&self, key_hash: &str) -> AppResult<()> {
         self.api_key_repository
-            .update_usage(&key_hash)
+            .update_usage(key_hash)
             .await
             .map_err(|e| e.context("Failed to update API key usage"))
     }

@@ -60,9 +60,17 @@ pub struct CreateApiKeyRequest {
     pub description: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub allowed_ips: Option<Vec<IpNetwork>>,
-    #[validate(range(min = 1, max = 10000, message = "Rate limit must be between 1 and 10000"))]
+    #[validate(range(
+        min = 1,
+        max = 10000,
+        message = "Rate limit must be between 1 and 10000"
+    ))]
     pub rate_limit_per_second: Option<i32>,
-    #[validate(range(min = 1, max = 20000, message = "Burst limit must be between 1 and 20000"))]
+    #[validate(range(
+        min = 1,
+        max = 20000,
+        message = "Burst limit must be between 1 and 20000"
+    ))]
     pub rate_limit_burst: Option<i32>,
 }
 

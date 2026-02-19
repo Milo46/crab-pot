@@ -6,7 +6,7 @@ use validator::Validate;
 
 use crate::{dto::common::CursorMetadata, AppError, AppResult, Log};
 
-fn validate_string_not_empty(string: &String) -> Result<(), validator::ValidationError> {
+fn validate_string_not_empty(string: &str) -> Result<(), validator::ValidationError> {
     if string.trim().is_empty() {
         return Err(validator::ValidationError::new("string_empty"));
     }

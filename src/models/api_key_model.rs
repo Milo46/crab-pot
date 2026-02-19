@@ -92,3 +92,14 @@ pub struct CreatedApiKey {
     pub api_key: ApiKey,
     pub plain_key: String,
 }
+
+pub struct NewApiKey {
+    pub key_hash: String,
+    pub key_prefix: Option<String>,
+    pub name: String,
+    pub description: Option<String>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub allowed_ips: Option<Vec<IpAddr>>,
+    pub rate_limit_per_second: Option<i32>,
+    pub rate_limit_burst: Option<i32>,
+}

@@ -1,6 +1,9 @@
 use sqlx::PgPool;
 
-use crate::{models::ApiKey, AppResult};
+use crate::{
+    models::{api_key_model::NewApiKey, ApiKey},
+    AppResult,
+};
 
 const API_KEY_COLUMNS: &str = r#"
     id, key_hash, key_prefix, name, description, created_at,
@@ -57,17 +60,7 @@ impl ApiKeyRepository {
         Ok(result)
     }
 
-    pub async fn create(
-        &self,
-        key_hash: &str,
-        key_prefix: Option<String>,
-        name: &str,
-        description: Option<&str>,
-        expires_at: Option<chrono::DateTime<chrono::Utc>>,
-        allowed_ips: Option<Vec<std::net::IpAddr>>,
-        rate_limit_per_second: Option<i32>,
-        rate_limit_burst: Option<i32>,
-    ) -> AppResult<ApiKey> {
+    pub async fn create(&self, new_key: &NewApiKey) -> AppResult<ApiKey> {
         let api_key = sqlx::query_as::<_, ApiKey>(
             r#"
             INSERT INTO api_keys (key_hash, key_prefix, name, description, expires_at, allowed_ips, rate_limit_per_second, rate_limit_burst)
@@ -77,14 +70,14 @@ impl ApiKeyRepository {
                       rate_limit_per_second, rate_limit_burst
             "#,
         )
-        .bind(&key_hash)
-        .bind(&key_prefix)
-        .bind(name)
-        .bind(description)
-        .bind(expires_at)
-        .bind(allowed_ips)
-        .bind(rate_limit_per_second)
-        .bind(rate_limit_burst)
+        .bind(&new_key.key_hash)
+        .bind(&new_key.key_prefix)
+        .bind(&new_key.name)
+        .bind(&new_key.description)
+        .bind(new_key.expires_at)
+        .bind(&new_key.allowed_ips)
+        .bind(new_key.rate_limit_per_second)
+        .bind(new_key.rate_limit_burst)
         .fetch_one(&self.pool)
         .await?;
 
