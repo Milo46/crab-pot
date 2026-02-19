@@ -1,7 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
     http::{header, HeaderMap, StatusCode},
-    response::IntoResponse,
     Extension, Json,
 };
 use uuid::Uuid;

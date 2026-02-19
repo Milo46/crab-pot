@@ -73,7 +73,7 @@ impl RateLimiter {
     pub fn get_status(
         &self,
         key_hash: &str,
-        max_per_second: u32,
+        _max_per_second: u32,
         burst_size: u32,
     ) -> RateLimitStatus {
         let now = Instant::now();
