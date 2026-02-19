@@ -82,8 +82,8 @@ impl RateLimiter {
         if let Some(entry) = self.buckets.get(key_hash) {
             if now.duration_since(entry.window_start) > window {
                 return RateLimitStatus {
-                    limit: max_per_second,
-                    remaining: max_per_second,
+                    limit: burst_size,
+                    remaining: burst_size,
                     reset_in_secs: 0,
                 };
             }
@@ -94,14 +94,14 @@ impl RateLimiter {
                 .as_secs();
 
             RateLimitStatus {
-                limit: max_per_second,
+                limit: burst_size,
                 remaining,
                 reset_in_secs,
             }
         } else {
             RateLimitStatus {
-                limit: max_per_second,
-                remaining: max_per_second,
+                limit: burst_size,
+                remaining: burst_size,
                 reset_in_secs: 0,
             }
         }
