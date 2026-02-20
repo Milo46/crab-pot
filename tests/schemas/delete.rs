@@ -1,4 +1,4 @@
-use log_server::SchemaResponse;
+use crab_pot::SchemaResponse;
 use reqwest::StatusCode;
 use uuid::Uuid;
 

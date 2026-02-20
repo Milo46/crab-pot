@@ -1,5 +1,5 @@
 use crate::common::{create_valid_schema, TestApp};
-use log_server::dto::SchemaResponse;
+use crab_pot::dto::SchemaResponse;
 use reqwest::StatusCode;
 
 #[tokio::test]

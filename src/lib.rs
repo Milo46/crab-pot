@@ -75,7 +75,7 @@ async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
     tracing::info!("Health check endpoint called");
     Ok(Json(json!({
         "status": "healthy",
-        "service": "log-server",
+        "service": "crab-pot",
         "timestamp": chrono::Utc::now().to_rfc3339()
     })))
 }
@@ -160,7 +160,7 @@ pub fn create_admin_app(app_state: AppState) -> Router {
     let admin_health_check = || async {
         Json(json!({
             "status": "healthy",
-            "service": "log-server-admin",
+            "service": "crab-pot-admin",
             "timestamp": chrono::Utc::now().to_rfc3339()
         }))
     };

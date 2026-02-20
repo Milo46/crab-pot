@@ -1,4 +1,4 @@
-use log_server::{
+use crab_pot::{
     create_admin_app, create_app, middleware::RateLimiter, ApiKeyRepository, ApiKeyService,
     AppState, Config, LogRepository, LogService, SchemaRepository, SchemaService,
 };

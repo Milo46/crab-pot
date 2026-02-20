@@ -1,4 +1,4 @@
-# Log Server SRD (Software Requirements Document) - v1.0.0
+# Crab Pot SRD (Software Requirements Document) - v1.0.0
 
 # Table of Contents
 
@@ -70,7 +70,7 @@ that conform to those schemas for centralized storage and later retrieval or ins
 Example workflow:
 
 1. A development team defines a schema for their application logs (e.g., web server access logs)
-2. They register this schema with the log server
+2. They register this schema with the Crab Pot
 3. Multiple components send logs conforming to this schema
 4. The service validates each log entry against the schema before storage
 
@@ -177,7 +177,7 @@ This section defines the functional requirements using testable, verifiable stat
 
 ## 5. API Endpoints
 
-Log Server operates with **two separate HTTP servers** for enhanced security:
+Crab Pot operates with **two separate HTTP servers** for enhanced security:
 
 1. **Main API (Port 8080)** - Public-facing API for schemas, logs, and real-time events
    - Requires API key authentication (Bearer token)
@@ -478,7 +478,7 @@ Log Deleted Event:
     ```json
     {
         "status": "healthy",
-        "service": "log-server",
+        "service": "crab-pot",
         "timestamp": "2025-11-13T10:00:00Z"
     }
     ```
@@ -679,7 +679,7 @@ Admin API health check endpoint.
 ```json
 {
   "status": "healthy",
-  "service": "log-server-admin",
+  "service": "crab-pot-admin",
   "timestamp": "2026-01-02T10:00:00Z"
 }
 ```
@@ -808,7 +808,7 @@ Content-Type: application/json
 
 ### 7.1 Dual-Server Architecture
 
-Log Server implements a **security-first architecture** with two separate HTTP servers:
+Crab Pot implements a **security-first architecture** with two separate HTTP servers:
 
 ```
 ┌─────────────────────────────────────────────┐

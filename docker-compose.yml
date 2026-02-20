@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: log-server-db
+    container_name: crab-pot-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: logserver
@@ -13,18 +13,18 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - log-server-network
+      - crab-pot-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U loguser -d logserver"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  log-server:
+  crab-pot:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: log-server-app
+    container_name: crab-pot-app
     restart: unless-stopped
     ports:
       - "8080:8080" # Main API
@@ -37,7 +37,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - log-server-network
+      - crab-pot-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s
@@ -49,5 +49,5 @@ volumes:
     driver: local
 
 networks:
-  log-server-network:
+  crab-pot-network:
     driver: bridge

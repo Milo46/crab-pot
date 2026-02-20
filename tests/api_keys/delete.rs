@@ -1,7 +1,7 @@
 use crate::common::{
     create_api_key, delete_api_key, get_api_key_by_id, get_api_keys, setup_admin_test_app,
 };
-use log_server::dto::{ApiKeysResponse, CreateApiKeyResponse};
+use crab_pot::dto::{ApiKeysResponse, CreateApiKeyResponse};
 use reqwest::StatusCode;
 use serde_json::json;
 

@@ -2,7 +2,7 @@ use crate::common::{
     create_api_key, get_api_key_by_id, setup_admin_test_app, valid_api_key_payload,
 };
 use chrono::{Duration, Utc};
-use log_server::dto::CreateApiKeyResponse;
+use crab_pot::dto::CreateApiKeyResponse;
 use reqwest::StatusCode;
 use serde_json::json;
 

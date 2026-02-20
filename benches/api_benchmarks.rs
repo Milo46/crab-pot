@@ -1,9 +1,9 @@
-use criterion::{
-    black_box, criterion_group, criterion_main, AxisScale, Criterion, PlotConfiguration,
-};
-use log_server::{
+use crab_pot::{
     create_app, middleware::RateLimiter, ApiKeyRepository, ApiKeyService, AppState, LogRepository,
     LogService, SchemaRepository, SchemaResponse, SchemaService,
+};
+use criterion::{
+    black_box, criterion_group, criterion_main, AxisScale, Criterion, PlotConfiguration,
 };
 use reqwest::Client;
 use sqlx::{Pool, Postgres};
@@ -73,7 +73,7 @@ async fn setup_benchmark_app() -> BenchmarkApp {
     let log_service = Arc::new(LogService::new(log_repo.clone(), schema_service.clone()));
     let api_key_service = Arc::new(ApiKeyService::new(api_key_repo.clone()));
 
-    let create_api_key_request = log_server::models::CreateApiKey::new("Benchmark API Key");
+    let create_api_key_request = crab_pot::models::CreateApiKey::new("Benchmark API Key");
     let test_api_key = api_key_service
         .create_api_key(create_api_key_request)
         .await

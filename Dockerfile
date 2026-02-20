@@ -27,12 +27,12 @@ RUN useradd -r -s /bin/false appuser
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/log-server ./
+COPY --from=builder /app/target/release/crab-pot ./
 
-RUN chown appuser:appuser log-server
+RUN chown appuser:appuser crab-pot
 
 USER appuser
 
 EXPOSE 8080
 
-CMD ["./log-server"]
+CMD ["./crab-pot"]

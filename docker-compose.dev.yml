@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: log-server-db-dev
+    container_name: crab-pot-db-dev
     restart: unless-stopped
     environment:
       POSTGRES_DB: logserver_dev
@@ -13,13 +13,13 @@ services:
     ports:
       - "5433:5432"
     networks:
-      - log-server-dev-network
+      - crab-pot-dev-network
 
-  log-server-dev:
+  crab-pot-dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: log-server-app-dev
+    container_name: crab-pot-app-dev
     restart: unless-stopped
     ports:
       - "8080:8080" # Main API
@@ -38,7 +38,7 @@ services:
     depends_on:
       - postgres
     networks:
-      - log-server-dev-network
+      - crab-pot-dev-network
     command: ["cargo", "watch", "-x", "run"]
 
 volumes:
@@ -46,5 +46,5 @@ volumes:
     driver: local
 
 networks:
-  log-server-dev-network:
+  crab-pot-dev-network:
     driver: bridge

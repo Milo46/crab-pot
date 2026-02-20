@@ -1,4 +1,4 @@
-use log_server::{
+use crab_pot::{
     create_admin_app, create_app, middleware::RateLimiter, ApiKeyRepository, ApiKeyService,
     AppState, LogRepository, LogService, SchemaRepository, SchemaService,
 };
@@ -44,7 +44,7 @@ impl TestApp {
         rate_limit_per_second: i32,
         rate_limit_burst: i32,
     ) -> String {
-        let create_request = log_server::models::CreateApiKey {
+        let create_request = crab_pot::models::CreateApiKey {
             name: format!("Test Key (limit: {}/s)", rate_limit_per_second),
             description: None,
             expires_at: None,
@@ -183,7 +183,7 @@ pub async fn setup_test_app() -> TestApp {
     let log_service = Arc::new(LogService::new(log_repo.clone(), schema_service.clone()));
     let api_key_service = Arc::new(ApiKeyService::new(api_key_repo.clone()));
 
-    let create_api_key_request = log_server::models::CreateApiKey::new("Test API Key");
+    let create_api_key_request = crab_pot::models::CreateApiKey::new("Test API Key");
     let test_api_key = api_key_service
         .create_api_key(create_api_key_request)
         .await

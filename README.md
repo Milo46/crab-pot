@@ -1,6 +1,6 @@
-# Log Server
+# Crab Pot
 
-**Log Server** is a centralized schema-on-write log sink. Right now, the application
+**Crab Pot** is a centralized schema-on-write log sink. Right now, the application
 covers very simple functionalities, e.g. creating schemas, log entries and then
 retrieving them back to the user. It validates the data structure and makes sure
 that data is consistent (every log has it's schema). It supports data transmission
@@ -16,7 +16,7 @@ via HTTP and data events via WebSocket also.
 4. 🔄 Repeat the push/retrieve cycle as needed
 5. 🗑️ Delete schemas or individual logs anytime
 
-## Why Log Server?
+## Why Crab Pot?
 
 - ✅ Schema Validation — Ensures data consistency across all logs
 - ✅ Centralized — All your logs in one secure place

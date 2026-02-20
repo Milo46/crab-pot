@@ -1,5 +1,5 @@
 use crate::common::{create_api_key, get_api_key_by_id, get_api_keys, setup_admin_test_app};
-use log_server::dto::{ApiKeyResponse, ApiKeysResponse, CreateApiKeyResponse};
+use crab_pot::dto::{ApiKeyResponse, ApiKeysResponse, CreateApiKeyResponse};
 use reqwest::StatusCode;
 use serde_json::json;
 
@@ -18,7 +18,7 @@ async fn admin_health_check_works() {
 
     let body: serde_json::Value = response.json().await.expect("Failed to parse JSON");
     assert_eq!(body["status"], "healthy");
-    assert_eq!(body["service"], "log-server-admin");
+    assert_eq!(body["service"], "crab-pot-admin");
     assert!(body["timestamp"].is_string());
 }
 

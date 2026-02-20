@@ -24,7 +24,7 @@ mod health {
 
         let body: serde_json::Value = response.json().await.expect("Failed to parse JSON");
         assert_eq!(body["status"], "healthy");
-        assert_eq!(body["service"], "log-server");
+        assert_eq!(body["service"], "crab-pot");
         assert!(body["timestamp"].is_string());
     }
 }

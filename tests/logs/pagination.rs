@@ -1,4 +1,4 @@
-use log_server::{Log, Schema};
+use crab_pot::{Log, Schema};
 use reqwest::StatusCode;
 use serde_json::Value;
 
