@@ -202,8 +202,7 @@ curl http://localhost:8080/logs/schemas/$SCHEMA_ID \
 
 > **🚀 Quick Start:** Use the helper script to avoid typing API keys:
 > ```sh
-> echo "export API_KEY=$API_KEY" > .env
-> ./scripts/api-curl.sh GET /schemas
+> ./scripts/api-curl.sh http://localhost:8080/schemas
 > ```
 
 ## Features

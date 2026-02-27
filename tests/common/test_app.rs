@@ -149,7 +149,7 @@ pub async fn setup_test_app() -> TestApp {
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
-            eprintln!("conncetion error: {}", e);
+            eprintln!("connection error: {}", e);
         }
     });
 
@@ -173,7 +173,7 @@ pub async fn setup_test_app() -> TestApp {
 
     let pool = sqlx::postgres::PgPool::connect(&dsn)
         .await
-        .expect("Failed to conncet to DB");
+        .expect("Failed to connect to DB");
 
     let schema_repo = Arc::new(SchemaRepository::new(pool.clone()));
     let log_repo = Arc::new(LogRepository::new(pool.clone()));

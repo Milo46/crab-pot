@@ -34,7 +34,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -46,7 +45,7 @@ jobs:
     name: Push Image
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
-    needs: [fmt, clippy]
+    needs: [fmt, clippy, test]
     steps:
       - uses: actions/checkout@v4
       - name: Docker metadata

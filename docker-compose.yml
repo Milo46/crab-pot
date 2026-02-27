@@ -28,11 +28,12 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080" # Main API
+      - "8081:8081" # Admin API
     environment:
       - RUST_LOG=info
       - DATABASE_URL=postgresql://loguser:${POSTGRES_PASSWORD:-logpass123}@postgres:5432/logserver
       - MAIN_API_ADDR=0.0.0.0:8080
-      - ADMIN_API_ADDR=127.0.0.1:8081
+      - ADMIN_API_ADDR=0.0.0.0:8081
     depends_on:
       postgres:
         condition: service_healthy
