@@ -34,7 +34,13 @@ pub async fn api_key_middleware(
         .api_key_service
         .find_valid_by_hash(&key_hash)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            if e.is_not_found() {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        })?;
 
     let client_ip = addr.ip();
     if !api_key.is_ip_allowed(&client_ip) {

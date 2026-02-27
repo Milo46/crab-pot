@@ -104,6 +104,10 @@ impl AppError {
         self
     }
 
+    pub fn is_not_found(&self) -> bool {
+        matches!(self.kind, AppErrorKind::NotFound(_))
+    }
+
     fn error_type(&self) -> &str {
         match self.kind {
             AppErrorKind::NotFound(_) => "NOT_FOUND",
