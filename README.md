@@ -202,7 +202,8 @@ curl http://localhost:8080/logs/schemas/$SCHEMA_ID \
 
 > **🚀 Quick Start:** Use the helper script to avoid typing API keys:
 > ```sh
-> ./scripts/api-curl.sh http://localhost:8080/schemas
+> source ./scripts/api-curl.sh
+> api-curl http://localhost:8080/schemas
 > ```
 
 ## Features
