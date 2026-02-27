@@ -1,265 +1,215 @@
 # Crab Pot
 
-**Crab Pot** is a centralized schema-on-write log sink. Right now, the application
-covers very simple functionalities, e.g. creating schemas, log entries and then
-retrieving them back to the user. It validates the data structure and makes sure
-that data is consistent (every log has it's schema). It supports data transmission
-via HTTP and data events via WebSocket also.
+## Description
 
-## Quickstart
+**Crab Pot** is a centralized log ingestion service with schema validation at write time. It uses JSON Schema to define log structures and validates every log entry against its schema before storage, ensuring data quality and consistency.
 
-🎯 The current user workflow:
+**Key features:**
+- **Schema-first approach**: Define your log structure with JSON Schema
+- **Automatic validation**: Reject invalid logs at ingestion time
+- **RESTful API**: Standard HTTP for all CRUD operations
+- **Real-time streaming**: WebSocket support for live log events
+- **Cursor-based pagination**: Efficient querying of large log collections
 
-1. 📋 Create/Update log schemas
-2. 📤 Push/Update logs continuously to the sink
-3. 📥 Retrieve and analyze logs anytime
-4. 🔄 Repeat the push/retrieve cycle as needed
-5. 🗑️ Delete schemas or individual logs anytime
+## Architecture
 
-## Why Crab Pot?
+The system consists of two components running in Docker:
 
-- ✅ Schema Validation — Ensures data consistency across all logs
-- ✅ Centralized — All your logs in one secure place
-- ✅ Simple HTTP API — Easy to integrate with any system
-- ✅ Data Integrity — Every log is validated against its schema
-- ✅ Live data updates - Every log write/deletion is now being pushed via WebSocket
-- ✅ Rate Limiting - Per API key custom rate limiting feature
+**Main API** (`:8080`) - Production-facing service:
+- Log ingestion and retrieval (schema-validated)
+- Schema management (create, read, update, delete)
+- WebSocket streaming for real-time log events
+- Protected by API key authentication
 
-## API Key Rate Limiting
+**Admin API** (`:8081`) - Internal management:
+- API key lifecycle (create, rotate, revoke)
+- Key management and monitoring
+- Should be network-isolated in production
 
-Each API key has configurable rate limits:
-- `rate_limit_per_second` - Base rate (default: 10 req/s)
-- `rate_limit_burst` - Burst capacity (default: 2x base rate)
+**Database**: PostgreSQL stores schemas, logs, and API keys with full transactional support.
 
-Rate limit headers are returned on all requests:
-- `X-RateLimit-Limit` - Your burst capacity
-- `X-RateLimit-Remaining` - Requests remaining
-- `X-RateLimit-Reset` - Seconds until reset
-- `Retry-After` - When rate limited (429 response)
+## Installation
 
-## Prerequisites
-- Docker and Docker Compose installed
-- Basic understanding of JSON and HTTP requests
+### Prerequisites
+- Docker and Docker Compose
+- Ports 8080 and 8081 available
 
-## Installation Guide
+### Quick Start
 
-The project runs on top of `docker compose` and is necessary in order to run the software
-in its production and development workflow.
+Start all services with a single command:
 
-To run the production workflow in the background, run this command:
-```bash
-docker compose -f docker-compose.yml up -d
+```sh
+docker compose up
 ```
 
-## Usage Examples
+The system will:
+1. Pull required images (Postgres, Crab Pot)
+2. Initialize the database with schema and seed data
+3. Start the Main API on `http://localhost:8080`
+4. Start the Admin API on `http://localhost:8081`
 
-There are two available interfaces:
-- pure HTTP requests for writing and reading data
-- WebSocket for getting live write updates on the data
+> **🔒 Security Note:** The Admin API is bound to all interfaces by default for development. In production, bind it to `127.0.0.1` and access via SSH tunnel or VPN.
 
-### 1. Create your schema.
-```bash
-curl \
-    --request POST \
-    --location http://localhost:8080/schemas \
-    --header "Content-Type: application/json" \
-    --data '{
-        "name": "temperature-readings",
-        "version": "1.0.0",
-        "description": "Logs for the temperature sensors inside my room",
-        "schema_definition": {
-            "type": "object",
-            "properties": {
-                "name": { "type": "string" },
-                "reading": { "type": "number" }
-            },
-            "required": [ "name", "reading" ]
-        }
-    }'
+### Development Mode
+
+For hot-reload during development:
+```sh
+docker compose -f docker-compose.dev.yml up
 ```
-Response:
+
+## First-time Use
+
+This guide walks you through the basic workflow: creating an API key, defining a schema, and ingesting logs.
+
+### Generate an API Key
+
+Create an API key via the admin API to authenticate your requests:
+
+```sh
+curl -X POST http://localhost:8081/api-keys \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-api-key"}'
+```
+
+**Response:**
 ```json
 {
-  "id": "891db49b-4d64-4ba0-b075-156c8c17ce1d",
-  "name": "temperature-readings",
-  "version": "1.0.0",
-  "description": "Logs for the temperature sensors inside my room",
-  "schema_definition": {
-    "properties": {
-      "name": {
-        "type": "string"
-      },
-      "reading": {
-        "type": "number"
+  "id": 1,
+  "key": "sk_KPceDoZWl1--DlXGNjqJS3IZQKbUubcKhVhcUHDEcyo",
+  "key_prefix": "sk_KPceDoZ...",
+  "name": "my-api-key",
+  "created_at": "2026-02-27T11:54:58.147643Z"
+}
+```
+
+> **⚠️ Important:** Save the `key` value - it won't be shown again! Export it for convenience:
+> ```sh
+> export API_KEY="sk_KPceDoZWl1--DlXGNjqJS3IZQKbUubcKhVhcUHDEcyo"
+> ```
+
+### Define a Log Schema
+
+Create a JSON Schema to validate incoming logs. Example: temperature measurements.
+
+```sh
+curl -X POST http://localhost:8080/schemas \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "temperature-measurements",
+    "version": "1.0.0",
+    "description": "Temperature sensor readings",
+    "schema_definition": {
+      "type": "object",
+      "required": ["timestamp", "location", "temperature"],
+      "properties": {
+        "timestamp": {"type": "string", "format": "date-time"},
+        "location": {"type": "string"},
+        "temperature": {"type": "number"}
       }
-    },
-    "required": [
-      "name",
-      "reading"
-    ],
-    "type": "object"
-  },
-  "created_at": "2025-11-20T20:52:14.548098+00:00",
-  "updated_at": "2025-11-20T20:52:14.548098+00:00"
+    }
+  }'
+```
+
+**Response:**
+```json
+{
+  "id": "d5141a46-f180-4073-943f-16d6a73a9fb2",
+  "name": "temperature-measurements",
+  "version": "1.0.0",
+  "created_at": "2026-02-27T12:14:11.305577+00:00"
 }
 ```
 
-### 2. Save schema's UUID from the application response. It will be needed to POST logs.
+> **📝 Tip:** Save the schema `id` for future use:
+> ```sh
+> export SCHEMA_ID="d5141a46-f180-4073-943f-16d6a73a9fb2"
+> ```
 
-### 3. Create your first log.
-```bash
-curl \
-    --request POST \
-    --location http://localhost:8080/logs \
-    --header "Content-Type: application/json" \
-    --data '{
-        "schema_id": "891db49b-4d64-4ba0-b075-156c8c17ce1d",
-        "log_data": {
-            "name": "desk",
-            "reading": 34
-        }
-    }'
+### Ingest Logs
+
+Submit log entries that conform to your schema:
+
+```sh
+curl -X POST http://localhost:8080/logs \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "schema_id": "'"$SCHEMA_ID"'",
+    "log_data": {
+      "timestamp": "2026-02-27T13:20:00+00:00",
+      "location": "outside-window",
+      "temperature": 20.0
+    }
+  }'
 ```
-Response:
+
+**Response:**
 ```json
 {
-  "id": 10,
-  "schema_id": "891db49b-4d64-4ba0-b075-156c8c17ce1d",
+  "id": 1,
+  "schema_id": "d5141a46-f180-4073-943f-16d6a73a9fb2",
   "log_data": {
-    "name": "desk",
-    "reading": 34
+    "timestamp": "2026-02-27T13:20:00+00:00",
+    "location": "outside-window",
+    "temperature": 20.0
   },
-  "created_at": "2025-11-20T20:54:59.555233+00:00"
+  "created_at": "2026-02-27T12:27:48.435435+00:00"
 }
 ```
 
-### 4. Retrieve all your logs.
-```bash
-curl \
-    --request GET \
-    --location http://localhost:8080/logs/schema/temperature-readings/1.0.0
+### Query Logs
+
+Retrieve logs by schema ID (with cursor-based pagination):
+
+```sh
+curl http://localhost:8080/logs/schemas/$SCHEMA_ID \
+  -H "Authorization: Bearer $API_KEY"
 ```
-Response:
+
+**Response:**
 ```json
 {
+  "schema_id": "d5141a46-f180-4073-943f-16d6a73a9fb2",
   "logs": [
     {
-      "created_at": "2025-11-20T20:54:59.555233+00:00",
-      "id": 10,
+      "id": 3,
       "log_data": {
-        "name": "desk",
-        "reading": 34
+        "timestamp": "2026-02-27T14:00:00+00:00",
+        "location": "outside-window",
+        "temperature": 23.5
       },
-      "schema_id": "891db49b-4d64-4ba0-b075-156c8c17ce1d"
+      "created_at": "2026-02-27T12:36:13.261374+00:00"
+    },
+    {
+      "id": 2,
+      "log_data": {
+        "timestamp": "2026-02-27T13:40:00+00:00",
+        "location": "outside-window",
+        "temperature": 22.0
+      },
+      "created_at": "2026-02-27T12:36:02.585400+00:00"
     }
   ],
-  "pagination": {
-    "page": 1,
-    "limit": 50,
-    "total_pages": 1,
-    "total_logs": 1
+  "cursor": {
+    "limit": 10,
+    "next_cursor": null,
+    "prev_cursor": 3,
+    "has_more": false
   }
 }
 ```
 
-**Note**: All filtering is performed at the database level for optimal performance.
-You can filter logs by providing query parameters such as pagination, sorting, or custom filters
-to minimize data transfer and improve response times.
-
-### 5. Filter logs with query parameters.
-
-You can use query parameters to paginate, sort, and filter logs by date range:
-
-```bash
-# Pagination: Get page 2 with 10 logs per page
-curl --request GET \
-    --location "http://localhost:8080/logs/schema/temperature-readings/1.0.0?page=2&limit=10"
-
-# Date filtering: Get logs from a specific time range
-curl --request GET \
-    --location "http://localhost:8080/logs/schema/temperature-readings/1.0.0?date_begin=2025-11-20T00:00:00Z&date_end=2025-11-21T00:00:00Z"
-
-# Combined: Pagination + date filtering
-curl --request GET \
-    --location "http://localhost:8080/logs/schema/temperature-readings/1.0.0?page=1&limit=20&date_begin=2025-11-20T00:00:00Z&date_end=2025-11-21T00:00:00Z"
-```
-
-### 6. Query logs with custom filters using POST.
-
-For more complex queries, use the POST endpoint to filter logs by their content:
-
-```bash
-curl \
-    --request POST \
-    --location http://localhost:8080/logs/schema/temperature-readings/1.0.0/query \
-    --header "Content-Type: application/json" \
-    --data '{
-        "page": 1,
-        "limit": 10,
-        "date_begin": "2025-11-20T00:00:00Z",
-        "date_end": "2025-11-21T00:00:00Z",
-        "filters": {
-            "name": "desk",
-            "reading": 34
-        }
-    }'
-```
-
-The `filters` object allows you to search for logs where specific fields match the provided values. This example returns logs where `name` equals "desk" AND `reading` equals 34.
-
-**Available query parameters:**
-- `page` — Page number (default: 1)
-- `limit` — Logs per page (default: 50)
-- `date_begin` — Start date in ISO 8601 format
-- `date_end` — End date in ISO 8601 format
-- `filters` — Object with field-value pairs to match (POST only)
-
-## Listening to events via WebSocket
-
-In order to get live updates on the logs, you have to somehow get
-notified by the server and you can achieve it by connecting to the
-WebSocket endpoint of the application.
-
-```bash
-# If you want to listen to all logs
-websocat "ws://localhost:8081/ws/logs"
-
-# And if you want to listen to only a specific schema
-websocat "ws://localhost:8081/ws/logs?schema_id=0a9dadf1-fd1b-4727-88d5-98aad5ce70a3"
-```
-
-**Note**: If you provide an invalid or non-existent `schema_id`,
-the WebSocket connection will fail with a `404 Not Found` error:
-```bash
-websocat: WebSocketError: Received unexpected status code (404 Not Found)
-```
-
-Make sure the schema exists before attempting to connect.
-
-The following events are currently supported:
-
-### 1. Log creation message
-```json
-{
-    "event_type": "created",
-    "id": 5826,
-    "schema_id": "0a9dadf1-fd1b-4727-88d5-98aad5ce70a3",
-    "log_data": {
-        "message":"Hello World from the working WebSocket connection!"
-    },
-    "created_at": "2025-12-05T11:13:36.361797+00:00"
-}
-```
-
-### 2. Log deletion message
-```json
-{
-    "event_type": "deleted",
-    "id": 5826,
-    "schema_id": "0a9dadf1-fd1b-4727-88d5-98aad5ce70a3"
-}
-```
+> **🚀 Quick Start:** Use the helper script to avoid typing API keys:
+> ```sh
+> echo "export API_KEY=$API_KEY" > .env
+> ./scripts/api-curl.sh GET /schemas
+> ```
 
 ## Features
-## Configuration
+
+_(Coming soon)_
+
 ## License
+
+MIT License - See [LICENSE](LICENSE) for details.
