@@ -19,6 +19,7 @@ WORKDIR /app
 COPY Cargo.toml ./
 
 COPY src ./src
+COPY benches ./benches
 
 RUN cargo build
 

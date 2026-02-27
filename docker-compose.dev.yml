@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: log-server-db-dev
+    container_name: crab-pot-db-dev
     restart: unless-stopped
     environment:
       POSTGRES_DB: logserver_dev
@@ -9,31 +9,36 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass123}
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ./docker/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/db:/docker-entrypoint-initdb.d:ro
     ports:
       - "5433:5432"
     networks:
-      - log-server-dev-network
+      - crab-pot-dev-network
 
-  log-server-dev:
+  crab-pot-dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: log-server-app-dev
+    container_name: crab-pot-app-dev
     restart: unless-stopped
     ports:
-      - "8081:8080"
+      - "8080:8080" # Main API
+      - "8081:8081" # Admin API
     environment:
-      - RUST_LOG=debug
-      - RUST_BACKTRACE=1
-      - DATABASE_URL=postgresql://loguser:${POSTGRES_PASSWORD:-devpass123}@postgres:5432/logserver_dev
+      RUST_LOG: debug
+      RUST_BACKTRACE: 1
+      DATABASE_URL: postgresql://loguser:${POSTGRES_PASSWORD:-devpass123}@postgres:5432/logserver_dev
+      MAIN_API_ADDR: 0.0.0.0:8080
+      ADMIN_API_ADDR: 0.0.0.0:8081
+      API_KEY: ${API_KEY}
     volumes:
       - ./src:/app/src:ro
+      - ./benches:/app/benches:ro
       - ./Cargo.toml:/app/Cargo.toml:ro
     depends_on:
       - postgres
     networks:
-      - log-server-dev-network
+      - crab-pot-dev-network
     command: ["cargo", "watch", "-x", "run"]
 
 volumes:
@@ -41,5 +46,5 @@ volumes:
     driver: local
 
 networks:
-  log-server-dev-network:
+  crab-pot-dev-network:
     driver: bridge

@@ -1,6 +1,6 @@
 # Scripts Directory
 
-This directory contains utility scripts for the log-server project.
+This directory contains utility scripts for the crab-pot project.
 
 ## 📋 TODO Scanners
 

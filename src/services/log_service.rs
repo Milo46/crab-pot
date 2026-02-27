@@ -1,7 +1,10 @@
-use crate::error::{AppError, AppResult};
+use crate::dto::{log_dto::Direction, CursorMetadata};
+use crate::error::AppResult;
+use crate::models::query_params::LogQueryParams;
 use crate::models::Log;
 use crate::repositories::log_repository::{LogRepository, LogRepositoryTrait};
-use crate::repositories::schema_repository::{SchemaRepository, SchemaRepositoryTrait};
+use crate::services::schema_service::SchemaService;
+use crate::AppError;
 use chrono::Utc;
 use serde_json::Value;
 use std::sync::Arc;
@@ -10,59 +13,37 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct LogService {
     log_repository: Arc<LogRepository>,
-    schema_repository: Arc<SchemaRepository>,
+    schema_service: Arc<SchemaService>,
 }
 
 impl LogService {
-    pub fn new(
-        log_repository: Arc<LogRepository>,
-        schema_repository: Arc<SchemaRepository>,
-    ) -> Self {
+    pub fn new(log_repository: Arc<LogRepository>, schema_service: Arc<SchemaService>) -> Self {
         Self {
             log_repository,
-            schema_repository,
+            schema_service,
         }
     }
 
-    pub async fn get_logs_by_schema_name_and_id(
-        &self,
-        name: &str,
-        version: &str,
-        filters: Option<Value>,
-    ) -> AppResult<Vec<Log>> {
-        let schema = self
-            .schema_repository
-            .get_by_name_and_version(name, version)
-            .await?;
-        if schema.is_none() {
-            return Err(AppError::NotFound(format!(
-                "Schema with name:version '{}:{}' not found",
-                name, version
-            )));
-        }
-
+    pub async fn get_log_by_id(&self, id: i32) -> AppResult<Log> {
         self.log_repository
-            .get_by_schema_id(schema.unwrap().id, filters)
+            .get_by_id(id)
             .await
-    }
-
-    pub async fn get_log_by_id(&self, id: i32) -> AppResult<Option<Log>> {
-        self.log_repository.get_by_id(id).await
+            .map_err(|e| e.context(format!("Failed to fetch log {}", id)))?
+            .ok_or_else(|| AppError::not_found(format!("Log with id {} not found", id)))
     }
 
     pub async fn create_log(&self, schema_id: Uuid, log_data: Value) -> AppResult<Log> {
-        let schema = self.schema_repository.get_by_id(schema_id).await?;
-        let schema = match schema {
-            Some(s) => s,
-            None => {
-                return Err(AppError::NotFound(format!(
-                    "Schema with id '{}' not found",
-                    schema_id
-                )))
-            }
-        };
+        if schema_id.is_nil() {
+            return Err(AppError::bad_request("Schema ID cannot be empty"));
+        }
 
-        self.validate_log_against_schema(&log_data, &schema.schema_definition)?;
+        if !log_data.is_object() {
+            return Err(AppError::bad_request("Log data must be a JSON object"));
+        }
+
+        self.schema_service
+            .validate_log_data(schema_id, &log_data)
+            .await?;
 
         let log = Log {
             id: 0, // This will be set by the database
@@ -71,35 +52,128 @@ impl LogService {
             created_at: Utc::now(),
         };
 
-        self.log_repository.create(&log).await
+        self.log_repository
+            .create(&log)
+            .await
+            .map_err(|e| e.context(format!("Failed to create log for schema {}", schema_id)))
     }
 
-    pub async fn delete_log(&self, id: i32) -> AppResult<bool> {
-        self.log_repository.delete(id).await
+    pub async fn delete_log(&self, id: i32) -> AppResult<Log> {
+        self.log_repository
+            .delete(id)
+            .await
+            .map_err(|e| e.context(format!("Failed to delete log {}", id)))?
+            .ok_or_else(|| AppError::not_found(format!("Log with id {} not found", id)))
     }
 
-    fn validate_log_against_schema(
+    pub async fn count_logs_by_schema_id(
         &self,
-        log_data: &Value,
-        schema_definition: &Value,
-    ) -> AppResult<()> {
-        let validator = jsonschema::ValidationOptions::default()
-            .with_draft(jsonschema::Draft::Draft7)
-            .build(schema_definition)
-            .map_err(|e| AppError::InternalError(format!("Invalid JSON schema: {}", e)))?;
+        schema_id: Uuid,
+        query_params: &LogQueryParams,
+    ) -> AppResult<i64> {
+        self.log_repository
+            .count_by_schema_id(schema_id, Some(query_params))
+            .await
+            .map_err(|e| e.context(format!("Failed to count logs for schema {}", schema_id)))
+    }
 
-        let errors: Vec<_> = validator
-            .iter_errors(log_data)
-            .map(|e| format!("Validation error at '{}': {}", e.instance_path, e))
-            .collect();
-
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(AppError::SchemaValidationError(format!(
-                "Schema validation failed: {}",
-                errors.join("; ")
-            )))
+    pub async fn get_cursor_logs(
+        &self,
+        schema_id: Uuid,
+        cursor: Option<i32>,
+        limit: i32,
+        filters: LogQueryParams,
+        direction: Direction,
+    ) -> AppResult<(Vec<Log>, CursorMetadata<i32>)> {
+        if schema_id.is_nil() {
+            return Err(AppError::bad_request("Schema ID cannot be nil"));
         }
+
+        if limit <= 0 {
+            return Err(AppError::bad_request("Limit must be greater than 0"));
+        }
+
+        self.schema_service
+            .get_schema_by_id(schema_id)
+            .await
+            .map_err(|e| {
+                e.context(format!(
+                    "Failed to check schema existence for {}",
+                    schema_id
+                ))
+            })?;
+
+        let forward = direction == Direction::Forward;
+
+        let mut logs = self
+            .log_repository
+            .get_all_with_cursor(schema_id, cursor, limit, filters, forward)
+            .await
+            .map_err(|e| {
+                e.context(format!(
+                    "Failed to get logs with cursor feature for schema {}",
+                    schema_id
+                ))
+            })?;
+
+        let has_more = logs.len() > limit as usize;
+
+        if has_more {
+            logs.pop();
+        }
+
+        if !forward {
+            logs.reverse();
+        }
+
+        let (next_cursor, prev_cursor) = match direction {
+            Direction::Forward => {
+                let next = if has_more {
+                    logs.last().map(|log| log.id)
+                } else {
+                    None
+                };
+                let prev = logs.first().map(|log| log.id);
+                (next, prev)
+            }
+            Direction::Backward => {
+                let next = logs.last().map(|log| log.id);
+                let prev = if has_more {
+                    logs.first().map(|log| log.id)
+                } else {
+                    None
+                };
+                (next, prev)
+            }
+        };
+
+        Ok((
+            logs,
+            CursorMetadata::<i32> {
+                limit,
+                next_cursor,
+                prev_cursor,
+                has_more,
+            },
+        ))
+    }
+
+    pub async fn get_initial_cursor(&self, schema_id: Uuid) -> AppResult<i32> {
+        if schema_id.is_nil() {
+            return Err(AppError::bad_request("Schema ID cannot be nil"));
+        }
+
+        let latest_id = self
+            .log_repository
+            .get_latest_log_id(schema_id)
+            .await
+            .map_err(|e| {
+                e.context(format!(
+                    "Failed to get latest log ID for schema {}",
+                    schema_id
+                ))
+            })?;
+
+        Ok(latest_id.map(|id| id + 1).unwrap_or(i32::MAX))
     }
 }

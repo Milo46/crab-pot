@@ -2,129 +2,61 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [dev, master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --check
+  
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy -- -D warnings
+  
   test:
+    name: Test
     runs-on: ubuntu-latest
-    
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-          POSTGRES_DB: logserver_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
+    if: github.event_name == 'pull_request'
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        override: true
-        components: rustfmt, clippy
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        run: cargo test --all-features
 
-    - name: Cache cargo registry
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo index
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Cache cargo build
-      uses: actions/cache@v3
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Check formatting
-      run: cargo fmt -- --check
-
-    - name: Run clippy
-      run: cargo clippy -- -D warnings
-
-    - name: Run unit tests
-      run: cargo test --lib
-
-    - name: Setup database for integration tests
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y postgresql-client
-        PGPASSWORD=postgres psql -h localhost -U postgres -d logserver_test -c "
-          CREATE TABLE IF NOT EXISTS schemas (
-              id VARCHAR(255) PRIMARY KEY,
-              name VARCHAR(255) NOT NULL,
-              version VARCHAR(50) NOT NULL,
-              description TEXT,
-              schema_definition JSONB NOT NULL,
-              created_at TIMESTAMPTZ DEFAULT NOW(),
-              updated_at TIMESTAMPTZ DEFAULT NOW(),
-              UNIQUE(name, version)
-          );
-          
-          CREATE TABLE IF NOT EXISTS logs (
-              id SERIAL PRIMARY KEY,
-              schema_id VARCHAR(255) NOT NULL REFERENCES schemas(id),
-              log_data JSONB NOT NULL,
-              created_at TIMESTAMPTZ DEFAULT NOW()
-          );
-        "
-
-    - name: Build application
-      run: cargo build --release
-
-    - name: Start server in background
-      run: |
-        export DATABASE_URL="postgresql://postgres:postgres@localhost/logserver_test"
-        export RUST_LOG=info
-        ./target/release/log-server &
-        echo $! > server.pid
-        sleep 5
-
-    - name: Run integration tests
-      run: cargo test --test integration_test
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost/logserver_test
-
-    - name: Stop server
-      run: |
-        if [ -f server.pid ]; then
-          kill $(cat server.pid) || true
-        fi
-
-  docker:
+  push:
+    name: Push Image
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [fmt, clippy]
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Build Docker image
-      run: docker build -t log-server .
-    
-    - name: Test Docker image
-      run: |
-        docker run --name test-container -d -p 8080:8080 \
-          -e DATABASE_URL="postgresql://user:pass@host/db" \
-          log-server || echo "Expected to fail without database"
-        sleep 2
-        docker logs test-container
-        docker rm -f test-container || true
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest

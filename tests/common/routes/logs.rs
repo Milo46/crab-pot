@@ -1,0 +1,107 @@
+use crate::common::{
+    fixtures::{valid_log_payload, valid_log_payload_with_message},
+    test_app::TestApp,
+};
+
+pub async fn create_log(app: &TestApp, payload: &serde_json::Value) -> reqwest::Response {
+    app.auth()
+        .post("/logs")
+        .json(&payload)
+        .send()
+        .await
+        .unwrap()
+}
+
+pub async fn create_valid_log<S: AsRef<str>>(app: &TestApp, schema_id: S) -> reqwest::Response {
+    app.auth()
+        .post("/logs")
+        .json(&valid_log_payload(schema_id.as_ref()))
+        .send()
+        .await
+        .unwrap()
+}
+
+pub async fn create_valid_log_with_message<S: AsRef<str>>(
+    app: &TestApp,
+    schema_id: S,
+    message: &str,
+) -> reqwest::Response {
+    app.auth()
+        .post("/logs")
+        .json(&valid_log_payload_with_message(schema_id.as_ref(), message))
+        .send()
+        .await
+        .unwrap()
+}
+
+pub async fn get_log<S: AsRef<str>>(app: &TestApp, id: S) -> reqwest::Response {
+    app.auth()
+        .get(format!("/logs/{}", id.as_ref()))
+        .send()
+        .await
+        .unwrap()
+}
+
+pub async fn get_logs_by_schema_name<S: AsRef<str>>(
+    app: &TestApp,
+    schema_name: S,
+) -> reqwest::Response {
+    app.auth()
+        .get(format!(
+            "/logs/by-schema-name/{}/latest",
+            schema_name.as_ref()
+        ))
+        .send()
+        .await
+        .unwrap()
+}
+
+pub async fn get_logs_by_schema_name_and_version<S: AsRef<str>>(
+    app: &TestApp,
+    schema_name: S,
+    schema_version: S,
+) -> reqwest::Response {
+    app.auth()
+        .get(format!(
+            "/logs/by-schema-name/{}/versions/{}",
+            schema_name.as_ref(),
+            schema_version.as_ref()
+        ))
+        .send()
+        .await
+        .unwrap()
+}
+
+pub async fn delete_log<S: AsRef<str>>(app: &TestApp, id: S) -> reqwest::Response {
+    app.auth()
+        .delete(format!("/logs/{}", id.as_ref()))
+        .send()
+        .await
+        .unwrap()
+}
+
+pub async fn get_logs_with_cursor<S: AsRef<str>>(
+    app: &TestApp,
+    schema_id: S,
+    cursor: Option<i32>,
+    limit: i32,
+    direction: &str,
+) -> reqwest::Response {
+    let mut query_params = vec![
+        ("limit", limit.to_string()),
+        ("direction", direction.to_string()),
+    ];
+
+    let cursor_str;
+    if let Some(c) = cursor {
+        cursor_str = c.to_string();
+        query_params.push(("cursor", cursor_str.clone()));
+    }
+
+    app.auth()
+        .get(format!("/logs/schemas/{}", schema_id.as_ref()))
+        .query(&query_params)
+        .send()
+        .await
+        .unwrap()
+}

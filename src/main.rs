@@ -1,5 +1,6 @@
-use log_server::{
-    create_app, AppState, LogRepository, LogService, SchemaRepository, SchemaService,
+use crab_pot::{
+    create_admin_app, create_app, middleware::RateLimiter, ApiKeyRepository, ApiKeyService,
+    AppState, Config, LogRepository, LogService, SchemaRepository, SchemaService,
 };
 use std::net::SocketAddr;
 use std::{env, sync::Arc};
@@ -8,11 +9,13 @@ use tokio::sync::broadcast;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let config = Config::from_env()?;
+
     use tracing_subscriber::fmt::format::FmtSpan;
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "tower_http=debug,log_server=debug,info".into()),
+                .unwrap_or_else(|_| config.rust_log.clone().into()),
         )
         .with_target(true)
         .with_thread_ids(false)
@@ -20,50 +23,96 @@ async fn main() -> anyhow::Result<()> {
         .with_span_events(FmtSpan::CLOSE)
         .init();
 
-    let database_url =
-        env::var("DATABASE_URL").expect("DATABASE_URL environment variable is not set");
-
-    let pool = sqlx::postgres::PgPool::connect(&database_url).await?;
+    let pool = sqlx::postgres::PgPool::connect(&config.database_url).await?;
     tracing::info!("✅ Database connected successfully!");
 
     let schema_repository = Arc::new(SchemaRepository::new(pool.clone()));
     let log_repository = Arc::new(LogRepository::new(pool.clone()));
+    let api_key_repository = Arc::new(ApiKeyRepository::new(pool.clone()));
 
     let schema_service = Arc::new(SchemaService::new(
         schema_repository.clone(),
         log_repository.clone(),
     ));
-    let log_service = Arc::new(LogService::new(log_repository.clone(), schema_repository));
+    let log_service = Arc::new(LogService::new(
+        log_repository.clone(),
+        schema_service.clone(),
+    ));
+    let api_key_service = Arc::new(ApiKeyService::new(api_key_repository.clone()));
 
-    let (log_broadcast_tx, _) = broadcast::channel(100);
+    let (log_broadcast_tx, _) = broadcast::channel(config.broadcast_channel_size);
+
+    let rate_limiter = Arc::new(RateLimiter::new());
 
     let app_state = AppState {
         schema_service,
         log_service,
+        api_key_service,
         log_broadcast: log_broadcast_tx,
+        rate_limiter,
     };
 
-    let app = create_app(app_state);
+    let app = create_app(app_state.clone(), pool);
+    let admin_app = create_admin_app(app_state.clone());
 
-    tracing::info!("📊 Available endpoints:");
-    tracing::info!("   GET    /                     - Health check");
-    tracing::info!("   GET    /health               - Health check");
-    tracing::info!("   GET    /ws/logs              - WebSocket for live log updates");
-    tracing::info!("   GET    /schemas              - Get all schemas");
-    tracing::info!("   POST   /schemas              - Create new schema");
-    tracing::info!("   GET    /schemas/:id          - Get schema by ID");
-    tracing::info!("   PUT    /schemas/:id          - Update schema");
-    tracing::info!("   DELETE /schemas/:id          - Delete schema");
-    tracing::info!("   POST   /logs                      - Create new log entry");
-    tracing::info!("   GET    /logs/schema/:schema_id - Get logs by schema ID");
-    tracing::info!("   GET    /logs/:id               - Get log by ID");
-    tracing::info!("   DELETE /logs/:id               - Delete log");
+    tracing::info!("📊 Main API endpoints:");
 
-    let addr: SocketAddr = "0.0.0.0:8080".parse()?;
-    tracing::info!("🚀 Log Server running at http://{}", addr);
+    tracing::info!("Health:");
+    tracing::info!("  GET  /");
+    tracing::info!("  GET  /health");
+    tracing::info!("Schemas:");
+    tracing::info!("  GET, POST         /schemas");
+    tracing::info!("  GET               /schemas/cursor/initial");
+    tracing::info!("  GET, PUT, DELETE  /schemas/{{id}}");
+    tracing::info!("  GET               /schemas/by-name/{{name}}/latest");
+    tracing::info!("  GET               /schemas/by-name/{{name}}/versions/{{version}}");
+    tracing::info!("Logs:");
+    tracing::info!("  POST         /logs");
+    tracing::info!("  GET, DELETE  /logs/{{id}}");
+    tracing::info!("  GET, POST    /logs/schemas/{{schema_id}}");
+    tracing::info!("  GET          /logs/schemas/{{schema_id}}/cursor/initial");
+    tracing::info!("  GET, POST    /logs/by-schema-name/{{name}}/latest");
+    tracing::info!("  GET, POST    /logs/by-schema-name/{{name}}/versions/{{version}}");
+    tracing::info!("WebSocket:");
+    tracing::info!("  GET  /ws/logs");
 
-    let listener = TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    let main_addr: SocketAddr = env::var("MAIN_API_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
+        .parse()?;
 
+    let admin_addr: SocketAddr = env::var("ADMIN_API_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1:8081".to_string())
+        .parse()?;
+
+    tracing::info!("");
+    tracing::info!("🚀 Main API Server running at http://{}", main_addr);
+    tracing::info!("🔐 Admin API Server running at http://{}", admin_addr);
+    tracing::info!("");
+    tracing::warn!(
+        "⚠️  SECURITY: Admin API is bound to {}. Ensure this is properly secured!",
+        admin_addr
+    );
+    tracing::warn!("⚠️  For production, bind admin API to 127.0.0.1 and use SSH tunnel or VPN.");
+
+    let main_listener = TcpListener::bind(config.main_api_addr).await?;
+    let admin_listener = TcpListener::bind(config.admin_api_addr).await?;
+
+    let admin_server = tokio::spawn(async move {
+        tracing::info!("Starting Admin API server...");
+        if let Err(e) = axum::serve(admin_listener, admin_app).await {
+            tracing::error!("Admin API server error: {}", e);
+        }
+    });
+
+    tracing::info!("Starting Main API server...");
+    let main_result = axum::serve(
+        main_listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await;
+
+    let _ = tokio::join!(admin_server);
+
+    main_result?;
     Ok(())
 }

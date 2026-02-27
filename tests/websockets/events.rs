@@ -1,5 +1,5 @@
-use crate::common::{valid_log_payload, valid_schema_payload, TestContext};
-use futures_util::{SinkExt, StreamExt};
+use crate::common::{create_log, create_valid_log, create_valid_schema, setup_test_app};
+use futures_util::StreamExt;
 use log_server::{Log, LogEvent, Schema};
 use serde_json::json;
 use tokio::time::{timeout, Duration};
@@ -7,30 +7,16 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 #[tokio::test]
 async fn receives_created_event_when_log_is_created() {
-    let ctx = TestContext::new().await;
+    let app = setup_test_app().await;
 
-    let schema_response = ctx
-        .client
-        .post(&format!("{}/schemas", ctx.base_url))
-        .json(&valid_schema_payload("ws-create-event-test"))
-        .send()
-        .await
-        .expect("Failed to create schema");
-
+    let schema_response = create_valid_schema(&app, "ws-create-event-test").await;
     let schema: Schema = schema_response.json().await.unwrap();
 
-    let ws_url = ctx.base_url.replace("http", "ws");
+    let ws_url = app.address.replace("http", "ws");
     let url = format!("{}/ws/logs", ws_url);
     let (mut ws_stream, _) = connect_async(&url).await.unwrap();
 
-    let log_response = ctx
-        .client
-        .post(&format!("{}/logs", ctx.base_url))
-        .json(&valid_log_payload(schema.id))
-        .send()
-        .await
-        .expect("Failed to create log");
-
+    let log_response = create_valid_log(&app, &schema.id.to_string()).await;
     let created_log: Log = log_response.json().await.unwrap();
 
     let ws_message = timeout(Duration::from_secs(5), ws_stream.next())
@@ -283,9 +269,9 @@ async fn multiple_clients_receive_same_events() {
     let ws_url = ctx.base_url.replace("http", "ws");
     let url = format!("{}/ws/logs", ws_url);
 
-    let (mut ws_stream1, _) = connect_async(&url).await.unwrap();
-    let (mut ws_stream2, _) = connect_async(&url).await.unwrap();
-    let (mut ws_stream3, _) = connect_async(&url).await.unwrap();
+    let (ws_stream1, _) = connect_async(&url).await.unwrap();
+    let (ws_stream2, _) = connect_async(&url).await.unwrap();
+    let (ws_stream3, _) = connect_async(&url).await.unwrap();
 
     let log_response = ctx
         .client

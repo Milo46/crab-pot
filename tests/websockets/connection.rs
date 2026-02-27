@@ -1,14 +1,13 @@
-use crate::common::{valid_schema_payload, TestContext};
+use crate::common::{create_valid_schema, setup_test_app};
 use futures_util::{SinkExt, StreamExt};
 use log_server::Schema;
-use reqwest::StatusCode;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 #[tokio::test]
 async fn successfully_connects_to_websocket_endpoint() {
-    let ctx = TestContext::new().await;
+    let app = setup_test_app().await;
 
-    let ws_url = ctx.base_url.replace("http", "ws");
+    let ws_url = app.address.replace("http", "ws");
     let url = format!("{}/ws/logs", ws_url);
 
     let result = connect_async(&url).await;
@@ -24,19 +23,12 @@ async fn successfully_connects_to_websocket_endpoint() {
 
 #[tokio::test]
 async fn successfully_connects_with_valid_schema_id() {
-    let ctx = TestContext::new().await;
+    let app = setup_test_app().await;
 
-    let schema_response = ctx
-        .client
-        .post(&format!("{}/schemas", ctx.base_url))
-        .json(&valid_schema_payload("ws-connection-test"))
-        .send()
-        .await
-        .expect("Failed to create schema");
-
+    let schema_response = create_valid_schema(&app, "ws-connection-test").await;
     let schema: Schema = schema_response.json().await.unwrap();
 
-    let ws_url = ctx.base_url.replace("http", "ws");
+    let ws_url = app.address.replace("http", "ws");
     let url = format!("{}/ws/logs?schema_id={}", ws_url, schema.id);
 
     let result = connect_async(&url).await;
@@ -51,11 +43,11 @@ async fn successfully_connects_with_valid_schema_id() {
 
 #[tokio::test]
 async fn rejects_connection_with_nonexistent_schema_id() {
-    let ctx = TestContext::new().await;
+    let app = setup_test_app().await;
 
     let nonexistent_id = uuid::Uuid::new_v4();
 
-    let ws_url = ctx.base_url.replace("http", "ws");
+    let ws_url = app.address.replace("http", "ws");
     let url = format!("{}/ws/logs?schema_id={}", ws_url, nonexistent_id);
 
     let result = connect_async(&url).await;
@@ -76,9 +68,9 @@ async fn rejects_connection_with_nonexistent_schema_id() {
 
 #[tokio::test]
 async fn rejects_connection_with_invalid_schema_id_format() {
-    let ctx = TestContext::new().await;
+    let app = setup_test_app().await;
 
-    let ws_url = ctx.base_url.replace("http", "ws");
+    let ws_url = app.address.replace("http", "ws");
     let url = format!("{}/ws/logs?schema_id=invalid-uuid", ws_url);
 
     let result = connect_async(&url).await;
@@ -99,9 +91,9 @@ async fn rejects_connection_with_invalid_schema_id_format() {
 
 #[tokio::test]
 async fn handles_graceful_disconnection() {
-    let ctx = TestContext::new().await;
+    let app = setup_test_app().await;
 
-    let ws_url = ctx.base_url.replace("http", "ws");
+    let ws_url = app.address.replace("http", "ws");
     let url = format!("{}/ws/logs", ws_url);
 
     let (mut ws_stream, _) = connect_async(&url).await.unwrap();
