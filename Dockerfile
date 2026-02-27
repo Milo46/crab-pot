@@ -6,9 +6,10 @@ FROM rust:latest AS builder
 
 WORKDIR /app
 
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 
 COPY src ./src
+COPY benches ./benches
 
 RUN cargo build --release
 
@@ -27,12 +28,12 @@ RUN useradd -r -s /bin/false appuser
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/crab-pot ./
+COPY --from=builder /app/target/release/log-server ./
 
-RUN chown appuser:appuser crab-pot
+RUN chown appuser:appuser log-server
 
 USER appuser
 
 EXPOSE 8080
 
-CMD ["./crab-pot"]
+CMD ["./log-server"]
