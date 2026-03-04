@@ -66,7 +66,7 @@ This guide walks you through the basic workflow: creating an API key, defining a
 Create an API key via the admin API to authenticate your requests:
 
 ```sh
-curl -X POST http://localhost:8081/api-keys \
+curl -X POST http://localhost:8081/v1/api-keys \
   -H "Content-Type: application/json" \
   -d '{"name": "my-api-key"}'
 ```
@@ -92,7 +92,7 @@ curl -X POST http://localhost:8081/api-keys \
 Create a JSON Schema to validate incoming logs. Example: temperature measurements.
 
 ```sh
-curl -X POST http://localhost:8080/schemas \
+curl -X POST http://localhost:8080/v1/schemas \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -131,7 +131,7 @@ curl -X POST http://localhost:8080/schemas \
 Submit log entries that conform to your schema:
 
 ```sh
-curl -X POST http://localhost:8080/logs \
+curl -X POST http://localhost:8080/v1/logs \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -163,7 +163,7 @@ curl -X POST http://localhost:8080/logs \
 Retrieve logs by schema ID (with cursor-based pagination):
 
 ```sh
-curl http://localhost:8080/logs/schemas/$SCHEMA_ID \
+curl http://localhost:8080/v1/logs/schemas/$SCHEMA_ID \
   -H "Authorization: Bearer $API_KEY"
 ```
 
