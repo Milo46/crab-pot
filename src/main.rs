@@ -61,20 +61,20 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("  GET  /");
     tracing::info!("  GET  /health");
     tracing::info!("Schemas:");
-    tracing::info!("  GET, POST         /schemas");
-    tracing::info!("  GET               /schemas/cursor/initial");
-    tracing::info!("  GET, PUT, DELETE  /schemas/{{id}}");
-    tracing::info!("  GET               /schemas/by-name/{{name}}/latest");
-    tracing::info!("  GET               /schemas/by-name/{{name}}/versions/{{version}}");
+    tracing::info!("  GET, POST         /v1/schemas");
+    tracing::info!("  GET               /v1/schemas/cursor/initial");
+    tracing::info!("  GET, PUT, DELETE  /v1/schemas/{{id}}");
+    tracing::info!("  GET               /v1/schemas/by-name/{{name}}/latest");
+    tracing::info!("  GET               /v1/schemas/by-name/{{name}}/versions/{{version}}");
     tracing::info!("Logs:");
-    tracing::info!("  POST         /logs");
-    tracing::info!("  GET, DELETE  /logs/{{id}}");
-    tracing::info!("  GET, POST    /logs/schemas/{{schema_id}}");
-    tracing::info!("  GET          /logs/schemas/{{schema_id}}/cursor/initial");
-    tracing::info!("  GET, POST    /logs/by-schema-name/{{name}}/latest");
-    tracing::info!("  GET, POST    /logs/by-schema-name/{{name}}/versions/{{version}}");
+    tracing::info!("  POST         /v1/logs");
+    tracing::info!("  GET, DELETE  /v1/logs/{{id}}");
+    tracing::info!("  GET, POST    /v1/logs/schemas/{{schema_id}}");
+    tracing::info!("  GET          /v1/logs/schemas/{{schema_id}}/cursor/initial");
+    tracing::info!("  GET, POST    /v1/logs/by-schema-name/{{name}}/latest");
+    tracing::info!("  GET, POST    /v1/logs/by-schema-name/{{name}}/versions/{{version}}");
     tracing::info!("WebSocket:");
-    tracing::info!("  GET  /ws/logs");
+    tracing::info!("  GET  /v1/ws/logs");
 
     let main_addr: SocketAddr = env::var("MAIN_API_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:8080".to_string())

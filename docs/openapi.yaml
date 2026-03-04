@@ -23,9 +23,9 @@ info:
     - **Admin API (Port 8081)**: Localhost-only API for key management (no auth required)
     
     ## Workflow
-    1. Create an API key using Admin API (POST /api-keys)
-    2. Register a JSON schema using Main API (POST /schemas)
-    3. Send log entries to Main API (POST /logs with schema_id)
+    1. Create an API key using Admin API (POST /v1/api-keys)
+    2. Register a JSON schema using Main API (POST /v1/schemas)
+    3. Send log entries to Main API (POST /v1/logs with schema_id)
     4. Query logs with filtering and pagination
     5. Subscribe to real-time events via WebSocket
     
@@ -96,7 +96,7 @@ paths:
                 service: "crab-pot"
                 timestamp: "2025-10-23T10:30:00Z"
 
-  /schemas:
+  /v1/schemas:
     post:
       summary: Create a new log schema
       description: |
@@ -218,7 +218,7 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimitExceeded'
 
-  /schemas/cursor/initial:
+  /v1/schemas/cursor/initial:
     get:
       summary: Get initial cursor for schema pagination
       description: Returns the initial cursor for forward or backward pagination
@@ -242,7 +242,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CursorResponse'
 
-  /schemas/{id}:
+  /v1/schemas/{id}:
     get:
       summary: Retrieve a specific schema
       description: Retrieves a single schema by its unique UUID
@@ -335,7 +335,7 @@ paths:
                 error: "SCHEMA_HAS_LOGS"
                 message: "Cannot delete schema: 5 log(s) are associated with this schema"
 
-  /schemas/by-name/{name}/latest:
+  /v1/schemas/by-name/{name}/latest:
     get:
       summary: Get latest schema version by name
       description: Retrieves the latest version of a schema by its name
@@ -360,7 +360,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /schemas/by-name/{name}/versions/{version}:
+  /v1/schemas/by-name/{name}/versions/{version}:
     get:
       summary: Get schema by name and version
       description: Retrieves a specific schema by its name and version
@@ -390,7 +390,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /logs:
+  /v1/logs:
     post:
       summary: Create a new log entry
       description: |
@@ -428,7 +428,7 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
 
-  /logs/{id}:
+  /v1/logs/{id}:
     get:
       summary: Retrieve a specific log entry
       description: Retrieves a single log entry by its ID
@@ -474,7 +474,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /logs/schema/{schema_id}:
+  /v1/logs/schema/{schema_id}:
     get:
       summary: Get logs by schema ID
       description: |
@@ -536,7 +536,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedLogsResponse'
 
-  /logs/schema/{schema_id}/cursor/initial:
+  /v1/logs/schema/{schema_id}/cursor/initial:
     get:
       summary: Get initial cursor for logs
       description: Returns the initial cursor for cursor-based pagination of logs
@@ -566,7 +566,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CursorResponse'
 
-  /logs/by-schema-name/{name}/latest:
+  /v1/logs/by-schema-name/{name}/latest:
     get:
       summary: Get logs by schema name (latest version)
       description: Retrieves logs for the latest version of a schema by name
@@ -622,7 +622,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedLogsResponse'
 
-  /logs/by-schema-name/{name}/versions/{version}:
+  /v1/logs/by-schema-name/{name}/versions/{version}:
     get:
       summary: Get logs by schema name and version
       description: Retrieves logs for a specific schema name and version
@@ -688,7 +688,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedLogsResponse'
 
-  /ws/logs:
+  /v1/ws/logs:
     get:
       summary: WebSocket connection for real-time log events
       description: |
@@ -720,7 +720,7 @@ paths:
 
   # ==================== ADMIN API (Port 8081) ====================
 
-  /api-keys:
+  /v1/api-keys:
     post:
       summary: Create a new API key
       description: |
@@ -777,7 +777,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiKeysResponse'
 
-  /api-keys/{key_id}:
+  /v1/api-keys/{key_id}:
     get:
       summary: Get API key details
       description: Retrieves details of a specific API key by its ID
@@ -831,7 +831,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api-keys/{key_id}/rotate:
+  /v1/api-keys/{key_id}/rotate:
     post:
       summary: Rotate an API key
       description: |

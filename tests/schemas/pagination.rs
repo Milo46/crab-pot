@@ -102,7 +102,7 @@ async fn pagination_with_name_filter() {
 
     let response = app
         .auth()
-        .get("/schemas")
+        .get("/v1/schemas")
         .query(&[
             ("name", "filtered-1"),
             ("limit", "10"),
@@ -137,7 +137,7 @@ async fn pagination_with_version_filter() {
 
     let response = app
         .auth()
-        .get("/schemas")
+        .get("/v1/schemas")
         .query(&[
             ("version", "1.0.0"),
             ("limit", "10"),
@@ -167,7 +167,7 @@ async fn empty_result_with_cursor() {
 
     let response = app
         .auth()
-        .get("/schemas")
+        .get("/v1/schemas")
         .query(&[("limit", "100"), ("direction", "forward")])
         .send()
         .await
@@ -197,7 +197,7 @@ async fn default_direction_is_forward() {
 
     let response = app
         .auth()
-        .get("/schemas")
+        .get("/v1/schemas")
         .query(&[("limit", "2")])
         .send()
         .await

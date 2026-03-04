@@ -2,7 +2,7 @@ use crate::common::{fixtures::valid_schema_payload, test_app::TestApp};
 
 pub async fn create_valid_schema(app: &TestApp, name: &str) -> reqwest::Response {
     app.auth()
-        .post("/schemas")
+        .post("/v1/schemas")
         .json(&valid_schema_payload(name))
         .send()
         .await
@@ -11,7 +11,7 @@ pub async fn create_valid_schema(app: &TestApp, name: &str) -> reqwest::Response
 
 pub async fn create_schema(app: &TestApp, payload: &serde_json::Value) -> reqwest::Response {
     app.auth()
-        .post("/schemas")
+        .post("/v1/schemas")
         .json(&payload)
         .send()
         .await
@@ -19,12 +19,12 @@ pub async fn create_schema(app: &TestApp, payload: &serde_json::Value) -> reqwes
 }
 
 pub async fn get_schemas(app: &TestApp) -> reqwest::Response {
-    app.auth().get("/schemas").send().await.unwrap()
+    app.auth().get("/v1/schemas").send().await.unwrap()
 }
 
 pub async fn get_schema_by_id(app: &TestApp, schema_id: &str) -> reqwest::Response {
     app.auth()
-        .get(format!("/schemas/{}", schema_id))
+        .get(format!("/v1/schemas/{}", schema_id))
         .send()
         .await
         .unwrap()
@@ -37,7 +37,7 @@ pub async fn get_schema_by_name_and_version(
 ) -> reqwest::Response {
     app.auth()
         .get(format!(
-            "/schemas/by-name/{}/versions/{}",
+            "/v1/schemas/by-name/{}/versions/{}",
             schema_name, schema_version
         ))
         .send()
@@ -51,7 +51,7 @@ pub async fn update_schema(
     payload: &serde_json::Value,
 ) -> reqwest::Response {
     app.auth()
-        .put(format!("/schemas/{}", schema_id))
+        .put(format!("/v1/schemas/{}", schema_id))
         .json(&payload)
         .send()
         .await
@@ -60,7 +60,7 @@ pub async fn update_schema(
 
 pub async fn delete_schema(app: &TestApp, schema_id: &str) -> reqwest::Response {
     app.auth()
-        .delete(format!("/schemas/{}", schema_id))
+        .delete(format!("/v1/schemas/{}", schema_id))
         .send()
         .await
         .unwrap()
@@ -82,7 +82,7 @@ pub async fn get_schemas_with_cursor(
     }
 
     app.auth()
-        .get("/schemas")
+        .get("/v1/schemas")
         .query(&query_params)
         .send()
         .await

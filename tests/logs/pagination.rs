@@ -195,7 +195,7 @@ async fn pagination_respects_filters() {
 
     let response = app
         .auth()
-        .get(format!("/logs/schemas/{}", schema.id))
+        .get(format!("/v1/logs/schemas/{}", schema.id))
         .query(&[("limit", "10"), ("direction", "forward")])
         .send()
         .await
@@ -221,7 +221,7 @@ async fn default_direction_is_forward() {
 
     let response = app
         .auth()
-        .get(format!("/logs/schemas/{}", schema.id))
+        .get(format!("/v1/logs/schemas/{}", schema.id))
         .query(&[("limit", "2")])
         .send()
         .await

@@ -108,7 +108,7 @@ async fn delete_with_invalid_id_format() {
 
     let response = app
         .client()
-        .delete("/api-keys/not-a-number")
+        .delete("/v1/api-keys/not-a-number")
         .send()
         .await
         .unwrap();

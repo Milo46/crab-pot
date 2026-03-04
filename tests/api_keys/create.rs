@@ -146,7 +146,7 @@ async fn rejects_invalid_json() {
 
     let response = app
         .client()
-        .post("/api-keys")
+        .post("/v1/api-keys")
         .header("Content-Type", "application/json")
         .body("invalid json content")
         .send()

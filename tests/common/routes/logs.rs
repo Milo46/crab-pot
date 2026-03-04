@@ -5,7 +5,7 @@ use crate::common::{
 
 pub async fn create_log(app: &TestApp, payload: &serde_json::Value) -> reqwest::Response {
     app.auth()
-        .post("/logs")
+        .post("/v1/logs")
         .json(&payload)
         .send()
         .await
@@ -14,7 +14,7 @@ pub async fn create_log(app: &TestApp, payload: &serde_json::Value) -> reqwest::
 
 pub async fn create_valid_log<S: AsRef<str>>(app: &TestApp, schema_id: S) -> reqwest::Response {
     app.auth()
-        .post("/logs")
+        .post("/v1/logs")
         .json(&valid_log_payload(schema_id.as_ref()))
         .send()
         .await
@@ -27,7 +27,7 @@ pub async fn create_valid_log_with_message<S: AsRef<str>>(
     message: &str,
 ) -> reqwest::Response {
     app.auth()
-        .post("/logs")
+        .post("/v1/logs")
         .json(&valid_log_payload_with_message(schema_id.as_ref(), message))
         .send()
         .await
@@ -36,7 +36,7 @@ pub async fn create_valid_log_with_message<S: AsRef<str>>(
 
 pub async fn get_log<S: AsRef<str>>(app: &TestApp, id: S) -> reqwest::Response {
     app.auth()
-        .get(format!("/logs/{}", id.as_ref()))
+        .get(format!("/v1/logs/{}", id.as_ref()))
         .send()
         .await
         .unwrap()
@@ -48,7 +48,7 @@ pub async fn get_logs_by_schema_name<S: AsRef<str>>(
 ) -> reqwest::Response {
     app.auth()
         .get(format!(
-            "/logs/by-schema-name/{}/latest",
+            "/v1/logs/by-schema-name/{}/latest",
             schema_name.as_ref()
         ))
         .send()
@@ -63,7 +63,7 @@ pub async fn get_logs_by_schema_name_and_version<S: AsRef<str>>(
 ) -> reqwest::Response {
     app.auth()
         .get(format!(
-            "/logs/by-schema-name/{}/versions/{}",
+            "/v1/logs/by-schema-name/{}/versions/{}",
             schema_name.as_ref(),
             schema_version.as_ref()
         ))
@@ -74,7 +74,7 @@ pub async fn get_logs_by_schema_name_and_version<S: AsRef<str>>(
 
 pub async fn delete_log<S: AsRef<str>>(app: &TestApp, id: S) -> reqwest::Response {
     app.auth()
-        .delete(format!("/logs/{}", id.as_ref()))
+        .delete(format!("/v1/logs/{}", id.as_ref()))
         .send()
         .await
         .unwrap()
@@ -99,7 +99,7 @@ pub async fn get_logs_with_cursor<S: AsRef<str>>(
     }
 
     app.auth()
-        .get(format!("/logs/schemas/{}", schema_id.as_ref()))
+        .get(format!("/v1/logs/schemas/{}", schema_id.as_ref()))
         .query(&query_params)
         .send()
         .await

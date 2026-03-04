@@ -131,7 +131,7 @@ pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
 
     let ws_routes = Router::new().route("/ws/logs", get(ws_handler));
 
-    let protected_routes = Router::new()
+    let v1_routes = Router::new()
         .merge(schema_routes)
         .merge(log_routes)
         .merge(ws_routes)
@@ -142,7 +142,7 @@ pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
 
     Router::new()
         .merge(public_routes)
-        .merge(protected_routes)
+        .nest("/v1", v1_routes)
         .with_state(app_state)
         .layer(
             ServiceBuilder::new()
@@ -165,14 +165,17 @@ pub fn create_admin_app(app_state: AppState) -> Router {
         }))
     };
 
-    Router::new()
-        .route("/", get(admin_health_check))
-        .route("/health", get(admin_health_check))
+    let admin_v1_routes = Router::new()
         .route("/api-keys", post(create_api_key))
         .route("/api-keys", get(get_api_keys))
         .route("/api-keys/{key_id}", get(get_api_key_by_id))
         .route("/api-keys/{key_id}", delete(delete_api_key))
-        .route("/api-keys/{key_id}/rotate", post(rotate_api_key))
+        .route("/api-keys/{key_id}/rotate", post(rotate_api_key));
+
+    Router::new()
+        .route("/", get(admin_health_check))
+        .route("/health", get(admin_health_check))
+        .nest("/v1", admin_v1_routes)
         .with_state(app_state)
         .layer(
             ServiceBuilder::new()
