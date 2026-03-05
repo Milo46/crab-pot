@@ -8,7 +8,7 @@ use crate::{
 const API_KEY_COLUMNS: &str = r#"
     id, key_hash, key_prefix, name, description, created_at,
     last_used_at, expires_at, is_active, usage_count, allowed_ips,
-    rate_limit_per_second, rate_limit_burst
+    rate_limit_per_second, rate_limit_burst, role
 "#;
 
 pub struct ApiKeyRepository {
@@ -63,11 +63,11 @@ impl ApiKeyRepository {
     pub async fn create(&self, new_key: &NewApiKey) -> AppResult<ApiKey> {
         let api_key = sqlx::query_as::<_, ApiKey>(
             r#"
-            INSERT INTO api_keys (key_hash, key_prefix, name, description, expires_at, allowed_ips, rate_limit_per_second, rate_limit_burst)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, key_hash, key_prefix, name, description, created_at, 
+            INSERT INTO api_keys (key_hash, key_prefix, name, description, expires_at, allowed_ips, rate_limit_per_second, rate_limit_burst, role)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id, key_hash, key_prefix, name, description, created_at,
                       last_used_at, expires_at, is_active, usage_count, allowed_ips,
-                      rate_limit_per_second, rate_limit_burst
+                      rate_limit_per_second, rate_limit_burst, role
             "#,
         )
         .bind(&new_key.key_hash)
@@ -78,6 +78,7 @@ impl ApiKeyRepository {
         .bind(&new_key.allowed_ips)
         .bind(new_key.rate_limit_per_second)
         .bind(new_key.rate_limit_burst)
+        .bind(new_key.role)
         .fetch_one(&self.pool)
         .await?;
 
@@ -121,9 +122,9 @@ impl ApiKeyRepository {
             SET key_hash = $2, 
                 key_prefix = $3
             WHERE id = $1
-            RETURNING id, key_hash, key_prefix, name, description, created_at, 
+            RETURNING id, key_hash, key_prefix, name, description, created_at,
                       last_used_at, expires_at, is_active, usage_count, allowed_ips,
-                      rate_limit_per_second, rate_limit_burst
+                      rate_limit_per_second, rate_limit_burst, role
             "#,
         )
         .bind(key_id)
@@ -138,10 +139,10 @@ impl ApiKeyRepository {
     pub async fn get_all(&self) -> AppResult<Vec<ApiKey>> {
         let api_keys = sqlx::query_as::<_, ApiKey>(
             r#"
-            SELECT id, key_hash, key_prefix, name, description, created_at, 
+            SELECT id, key_hash, key_prefix, name, description, created_at,
                    last_used_at, expires_at, is_active, usage_count, allowed_ips,
-                   rate_limit_per_second, rate_limit_burst
-            FROM api_keys 
+                   rate_limit_per_second, rate_limit_burst, role
+            FROM api_keys
             ORDER BY created_at DESC
             "#,
         )
@@ -154,10 +155,10 @@ impl ApiKeyRepository {
     pub async fn get_expired_active(&self) -> AppResult<Vec<ApiKey>> {
         let expired_active_api_keys = sqlx::query_as::<_, ApiKey>(
             r#"
-            SELECT id, key_hash, key_prefix, name, description, created_at, 
+            SELECT id, key_hash, key_prefix, name, description, created_at,
                    last_used_at, expires_at, is_active, usage_count, allowed_ips,
-                   rate_limit_per_second, rate_limit_burst
-            FROM api_keys 
+                   rate_limit_per_second, rate_limit_burst, role
+            FROM api_keys
             WHERE is_active = true 
                 AND expires_at IS NOT NULL 
                 AND expires_at <= NOW()
@@ -174,9 +175,9 @@ impl ApiKeyRepository {
             r#"
             DELETE FROM api_keys 
             WHERE id = $1
-            RETURNING id, key_hash, key_prefix, name, description, created_at, 
+            RETURNING id, key_hash, key_prefix, name, description, created_at,
                       last_used_at, expires_at, is_active, usage_count, allowed_ips,
-                      rate_limit_per_second, rate_limit_burst
+                      rate_limit_per_second, rate_limit_burst, role
             "#,
         )
         .bind(id)

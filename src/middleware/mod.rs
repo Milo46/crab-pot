@@ -1,6 +1,7 @@
 pub mod api_key;
 pub mod rate_limiter;
 pub mod request_id;
+pub mod require_permission;
 
 pub use api_key::api_key_middleware;
 pub use rate_limiter::RateLimiter;

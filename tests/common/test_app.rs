@@ -51,6 +51,7 @@ impl TestApp {
             allowed_ips: None,
             rate_limit_per_second: Some(rate_limit_per_second),
             rate_limit_burst: Some(rate_limit_burst),
+            role: None,
         };
 
         let created_key = self

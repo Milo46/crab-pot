@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, types::ipnetwork::IpNetwork};
 
-use crate::dto::api_key_dto::CreateApiKeyRequest;
+use crate::{dto::api_key_dto::CreateApiKeyRequest, models::role::Role};
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct ApiKey {
@@ -22,6 +22,7 @@ pub struct ApiKey {
     pub allowed_ips: Option<Vec<IpNetwork>>,
     pub rate_limit_per_second: Option<i32>,
     pub rate_limit_burst: Option<i32>,
+    pub role: Role,
 }
 
 impl ApiKey {
@@ -58,6 +59,7 @@ pub struct CreateApiKey {
     pub allowed_ips: Option<Vec<IpNetwork>>,
     pub rate_limit_per_second: Option<i32>,
     pub rate_limit_burst: Option<i32>,
+    pub role: Option<Role>,
 }
 
 impl CreateApiKey {
@@ -69,6 +71,7 @@ impl CreateApiKey {
             allowed_ips: None,
             rate_limit_per_second: None,
             rate_limit_burst: None,
+            role: None,
         }
     }
 }
@@ -82,6 +85,7 @@ impl From<CreateApiKeyRequest> for CreateApiKey {
             allowed_ips: value.allowed_ips,
             rate_limit_per_second: value.rate_limit_per_second,
             rate_limit_burst: value.rate_limit_burst,
+            role: value.role,
         }
     }
 }
@@ -102,4 +106,5 @@ pub struct NewApiKey {
     pub allowed_ips: Option<Vec<IpAddr>>,
     pub rate_limit_per_second: Option<i32>,
     pub rate_limit_burst: Option<i32>,
+    pub role: Role,
 }

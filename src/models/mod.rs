@@ -1,6 +1,8 @@
 pub mod api_key_model;
 pub mod log_model;
+pub mod permission;
 pub mod query_params;
+pub mod role;
 pub mod schema_model;
 pub mod schema_name_version;
 

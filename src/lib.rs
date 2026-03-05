@@ -30,10 +30,12 @@ use crate::{
             get_logs_by_schema_name_and_version, get_logs_by_schema_name_and_version_query,
             get_logs_by_schema_name_latest, get_logs_by_schema_name_latest_query,
         },
+        me_handler::me,
         schema_handlers::get_schemas_initial_cursor,
         update_schema, ws_handler,
     },
-    middleware::api_key_middleware,
+    middleware::{api_key_middleware, require_permission::require_permission},
+    models::permission::Permission,
 };
 
 pub use config::Config;
@@ -85,12 +87,9 @@ pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
         .route("/", get(health_check))
         .route("/health", get(health_check));
 
-    let schema_routes = Router::new()
+    let schema_read_routes = Router::new()
         .route("/schemas", get(get_schemas))
-        .route("/schemas", post(create_schema))
         .route("/schemas/{id}", get(get_schema_by_id))
-        .route("/schemas/{id}", put(update_schema))
-        .route("/schemas/{id}", delete(delete_schema))
         .route("/schemas/cursor/initial", get(get_schemas_initial_cursor))
         .route(
             "/schemas/by-name/{schema_name}/latest",
@@ -99,15 +98,35 @@ pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
         .route(
             "/schemas/by-name/{schema_name}/versions/{schema_version}",
             get(get_schema_by_name_and_version),
-        );
+        )
+        .layer(axum_middleware::from_fn_with_state(
+            Permission::SchemasRead,
+            require_permission,
+        ));
 
-    let log_routes = Router::new()
-        .route("/logs", post(create_log))
-        // .route("/logs/bulk", post(create_logs_bulk))
+    let schema_write_routes = Router::new()
+        .route("/schemas", post(create_schema))
+        .route("/schemas/{id}", put(update_schema))
+        .layer(axum_middleware::from_fn_with_state(
+            Permission::SchemasWrite,
+            require_permission,
+        ));
+
+    let schema_delete_routes = Router::new()
+        .route("/schemas/{id}", delete(delete_schema))
+        .layer(axum_middleware::from_fn_with_state(
+            Permission::SchemasDelete,
+            require_permission,
+        ));
+
+    let schema_routes = Router::new()
+        .merge(schema_read_routes)
+        .merge(schema_write_routes)
+        .merge(schema_delete_routes);
+
+    let log_read_routes = Router::new()
         .route("/logs/{id}", get(get_log_by_id))
-        .route("/logs/{id}", delete(delete_log))
         .route("/logs/schemas/{schema_id}", get(get_logs))
-        .route("/logs/schemas/{schema_id}", post(get_logs_query))
         .route(
             "/logs/schemas/{schema_id}/cursor/initial",
             get(get_initial_cursor),
@@ -117,24 +136,48 @@ pub fn create_app(app_state: AppState, _pool: PgPool) -> Router {
             get(get_logs_by_schema_name_latest),
         )
         .route(
+            "/logs/by-schema-name/{name}/versions/{version}",
+            get(get_logs_by_schema_name_and_version),
+        )
+        .layer(axum_middleware::from_fn_with_state(
+            Permission::SchemasRead,
+            require_permission,
+        ));
+
+    let log_write_routes = Router::new()
+        .route("/logs", post(create_log))
+        .route("/logs/schemas/{schema_id}", post(get_logs_query))
+        .route(
             "/logs/by-schema-name/{name}/latest",
             post(get_logs_by_schema_name_latest_query),
         )
         .route(
             "/logs/by-schema-name/{name}/versions/{version}",
-            get(get_logs_by_schema_name_and_version),
-        )
-        .route(
-            "/logs/by-schema-name/{name}/versions/{version}",
             post(get_logs_by_schema_name_and_version_query),
-        );
+        )
+        .layer(axum_middleware::from_fn_with_state(
+            Permission::SchemasWrite,
+            require_permission,
+        ));
 
-    let ws_routes = Router::new().route("/ws/logs", get(ws_handler));
+    let log_delete_routes = Router::new().route("/logs/{id}", delete(delete_log)).layer(
+        axum_middleware::from_fn_with_state(Permission::SchemasDelete, require_permission),
+    );
+
+    let log_routes = Router::new()
+        .merge(log_read_routes)
+        .merge(log_write_routes)
+        .merge(log_delete_routes);
+
+    let ws_routes = Router::new().route("/ws/logs", get(ws_handler)).layer(
+        axum_middleware::from_fn_with_state(Permission::WsConnect, require_permission),
+    );
 
     let v1_routes = Router::new()
         .merge(schema_routes)
         .merge(log_routes)
         .merge(ws_routes)
+        .route("/me", get(me))
         .layer(axum_middleware::from_fn_with_state(
             app_state.clone(),
             api_key_middleware,

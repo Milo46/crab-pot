@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 use crate::{
     models::{
         api_key_model::{CreatedApiKey, NewApiKey},
+        role::Role,
         ApiKey, CreateApiKey,
     },
     repositories::ApiKeyRepository,
@@ -61,6 +62,7 @@ impl ApiKeyService {
             allowed_ips,
             rate_limit_per_second: request.rate_limit_per_second,
             rate_limit_burst: request.rate_limit_burst,
+            role: request.role.unwrap_or(Role::Writer),
         };
 
         let api_key = self

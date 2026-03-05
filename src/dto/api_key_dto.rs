@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::types::ipnetwork::IpNetwork;
 use validator::Validate;
 
-use crate::models::{api_key_model::CreatedApiKey, ApiKey};
+use crate::models::{api_key_model::CreatedApiKey, role::Role, ApiKey};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKeyResponse {
@@ -72,6 +72,7 @@ pub struct CreateApiKeyRequest {
         message = "Burst limit must be between 1 and 20000"
     ))]
     pub rate_limit_burst: Option<i32>,
+    pub role: Option<Role>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +83,7 @@ pub struct CreateApiKeyResponse {
     pub name: String,
     pub created_at: DateTime<Utc>,
     pub expires_at: Option<DateTime<Utc>>,
+    pub role: Role,
 }
 
 impl From<CreatedApiKey> for CreateApiKeyResponse {
@@ -93,6 +95,7 @@ impl From<CreatedApiKey> for CreateApiKeyResponse {
             name: value.api_key.name,
             created_at: value.api_key.created_at,
             expires_at: value.api_key.expires_at,
+            role: value.api_key.role,
         }
     }
 }

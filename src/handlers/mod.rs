@@ -1,5 +1,6 @@
 pub mod api_key_handlers;
 pub mod log_handlers;
+pub mod me_handler;
 pub mod schema_handlers;
 pub mod ws_handlers;
 
